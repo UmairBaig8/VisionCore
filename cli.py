@@ -76,6 +76,10 @@ def analyze(
         False, "--no-classify",
         help="Skip video type classification (default: classify first 3 frames)"
     ),
+    location: str = typer.Option(
+        None, "--location",
+        help="Manual location override (stadium/venue name). Auto-detect if omitted."
+    ),
 ):
     """Analyze a video"""
     from pathlib import Path
@@ -95,6 +99,7 @@ def analyze(
         depth=depth,
         live=live,
         classify=not no_classify,
+        location=location,
     )
     orchestrator.run()
 
@@ -114,6 +119,10 @@ def stream(
     no_classify: bool = typer.Option(
         False, "--no-classify",
         help="Skip video type classification"
+    ),
+    location: str = typer.Option(
+        None, "--location",
+        help="Manual location override"
     ),
 ):
     """Live event stream"""
@@ -135,6 +144,7 @@ def stream(
         stream_mode=True,
         live=live,
         classify=not no_classify,
+        location=location,
     )
     orchestrator.run()
 

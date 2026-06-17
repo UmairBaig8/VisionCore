@@ -49,6 +49,34 @@ def _format_events_for_summary(timeline):
     return "\n---\n".join(lines)
 
 
+def _detect_geo(client, video_path):
+    geo_prompt_path = agents_dir() / "geo_agent.md"
+    if not geo_prompt_path.exists():
+        return None
+    geo_prompt = geo_prompt_path.read_text()
+    for ts, frame in sample_frames(video_path, 5.0):
+        b64 = encode_frame(frame)
+        if not b64:
+            continue
+        result = _ask_with_retry(client, geo_prompt, b64)
+        if result:
+            try:
+                text = result.strip()
+                if "```" in text:
+                    for part in text.split("```"):
+                        part = part.strip()
+                        if part.startswith("json"):
+                            part = part[4:]
+                        if part.startswith("{") and part.endswith("}"):
+                            text = part
+                            break
+                return json.loads(text)
+            except (json.JSONDecodeError, AttributeError):
+                return None
+        break
+    return None
+
+
 def _load_type_prompts():
     path = agents_dir() / "type_prompts.json"
     if path.exists():
@@ -104,7 +132,7 @@ class VideoOrchestrator:
 
     def __init__(self, video_path, sample_interval=0.5,
                  depth="full", stream_mode=False, report_only=False,
-                 live=False, classify=True):
+                 live=False, classify=True, location=None):
         self.video_path = video_path
         self.sample_interval = sample_interval
         self.depth = depth
@@ -112,7 +140,9 @@ class VideoOrchestrator:
         self.report_only = report_only
         self.live = live
         self.classify = classify
+        self.location = location
         self.video_type = None
+        self.geo = None
 
     def _run_parallel(self, client, tasks):
         results = {}
@@ -144,6 +174,18 @@ class VideoOrchestrator:
         else:
             self.video_type = {"video_type": "full_match", "confidence": 1.0,
                                "evidence": "classification skipped"}
+
+        # ── geo detection ──
+        if self.location:
+            self.geo = {"stadium": self.location, "source": "manual"}
+            print(f"Location: {self.location} (manual)")
+        else:
+            print("Detecting location", end="", flush=True)
+            self.geo = _detect_geo(client, self.video_path)
+            if self.geo:
+                print(f" → {self.geo.get('stadium', 'unknown')}, {self.geo.get('country', '')}")
+            else:
+                print(" → unknown")
 
         vt = self.video_type["video_type"]
 
@@ -261,8 +303,18 @@ class VideoOrchestrator:
         header = (
             f"# {video_stem}\n\n"
             f"**Video Type:** {vt} (confidence: {self.video_type['confidence']:.0%})\n"
-            f"**Evidence:** {self.video_type.get('evidence', '')}\n\n"
         )
+        if self.geo:
+            geo = self.geo
+            header += (
+                f"**Location:** {geo.get('stadium', 'unknown')}"
+                f" — {geo.get('city', '')}, {geo.get('country', '')}\n"
+            )
+            if geo.get("league"):
+                header += f"**League:** {geo['league']}\n"
+            if geo.get("teams"):
+                header += f"**Teams:** {', '.join(geo['teams'])}\n"
+        header += f"**Evidence:** {self.video_type.get('evidence', '')}\n\n"
         if highlights:
             header += f"## Highlights\n\n{highlights}\n\n---\n\n"
 
