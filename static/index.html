@@ -1295,6 +1295,10 @@
                 <div class="tel-value small-style" id="sport-val">Sport: --</div>
                 <div class="tel-value small-style" id="type-val" style="margin-top: 2px; font-size: 11px;">Type: --</div>
               </div>
+              <div class="tel-card location">
+                <div class="tel-label">Stadium</div>
+                <div class="tel-value small-style" id="location-val">--</div>
+              </div>
             </div>
 
             <!-- Video Player Console -->
@@ -2194,7 +2198,10 @@ function handleWebSocketEvent(data) {
       if (data.score) setStat('score-val', data.score);
       if (data.sport) { setStat('sport-val', data.sport); markCheck('check-sport', data.sport); }
       if (data.video_type) markCheck('check-type', data.video_type);
-      if (data.location && data.location !== 'unknown') markCheck('check-location', data.location);
+      if (data.location && data.location !== 'unknown') {
+        markCheck('check-location', data.location);
+        setStat('location-val', data.location);
+      }
       drawPitch();
       startVideoIfReady();
       break;
