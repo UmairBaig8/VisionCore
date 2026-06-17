@@ -146,11 +146,12 @@ class VideoOrchestrator:
             timeline.add(event_dict)
 
             if self.stream_mode:
-                print(f"[{timestamp:.1f}s] {scene_desc[:120]}")
-                if commentary_str:
-                    print(f"  > {commentary_str[:120]}")
+                print(f"\n[{timestamp:.1f}s] {scene_desc}")
                 if event_str:
-                    print(f"  * {event_str[:120]}")
+                    print(f"  * {event_str}")
+                if commentary_str:
+                    print(f"  > {commentary_str}")
+                print()
             elif not self.report_only:
                 bar_len = 30
                 done = int(bar_len * processed / max(total_frames, 1))
