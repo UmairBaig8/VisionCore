@@ -204,7 +204,7 @@ def _build_report_header(ctx, video_stem):
     return "\n".join(header)
 
 
-def _update_context_from_scene(ctx, scene_desc):
+def _update_context_from_scene(ctx, scene_desc, skip_score=False):
     if not scene_desc or not ctx:
         return
 
@@ -225,6 +225,9 @@ def _update_context_from_scene(ctx, scene_desc):
                                                   "possession", "advancing")):
         if ctx.phase in ("kickoff", "commercial", "unknown"):
             ctx.update_phase("open_play")
+
+    if skip_score:
+        return
 
     # ── score extraction: only match score-like patterns, not jersey numbers ──
     score_patterns = [
@@ -390,6 +393,11 @@ class VideoOrchestrator:
                                         clip_after=self.clip_after)
 
         # ── frame loop ──
+        scoreboard_prompt = None
+        scoreboard_path = agents_dir() / "scoreboard_agent.md"
+        if scoreboard_path.exists():
+            scoreboard_prompt = scoreboard_path.read_text()
+
         for timestamp, frame in sampler(self.video_path, self.sample_interval):
             t_start = time.time()
             processed += 1
@@ -404,10 +412,38 @@ class VideoOrchestrator:
             if scene_desc is None:
                 continue
 
-            # extract score + phase from scene description (heuristic fallback)
+            # step 1b: scoreboard reading (every 5th frame, crops top 20%)
+            sb_score = None
+            if scoreboard_prompt and processed % 5 == 0:
+                h, w = frame.shape[:2]
+                crop = frame[0:int(h * 0.20), :]
+                sb_b64 = encode_frame(crop)
+                if sb_b64:
+                    sb_result = _ask_with_retry(client, scoreboard_prompt, sb_b64, label="scoreboard")
+                    if sb_result:
+                        sb_parsed = _parse_json_safe(sb_result)
+                        sb_score = sb_parsed.get("score", "")
+                        sb_conf = sb_parsed.get("confidence", 0)
+                        if sb_score and sb_score != "NO_SCOREBOARD" and sb_conf >= 0.7:
+                            try:
+                                parts = sb_score.strip().split("-")
+                                if len(parts) == 2:
+                                    sh, sa = int(parts[0].strip()), int(parts[1].strip())
+                                    # never decrease — score only goes up
+                                    if sh >= self.ctx.home_score and sa >= self.ctx.away_score:
+                                        if (sh, sa) != (self.ctx.home_score, self.ctx.away_score):
+                                            self.ctx.home_score = sh
+                                            self.ctx.away_score = sa
+                                            self.ctx.last_score_change = "scoreboard"
+                                            self.emitter.on_score_change(sh, sa)
+                                            logger.debug("  scoreboard read %d-%d", sh, sa)
+                            except (ValueError, IndexError):
+                                pass
+
+            # extract score + phase from scene description (fallback — skip score if scoreboard read this frame)
             old_score = self.ctx.score_string()
             old_phase = self.ctx.phase
-            _update_context_from_scene(self.ctx, scene_desc)
+            _update_context_from_scene(self.ctx, scene_desc, skip_score=sb_score is not None)
             if self.ctx.score_string() != old_score:
                 self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
             if self.ctx.phase != old_phase and not self.ctx.phase_changed:
