@@ -262,20 +262,15 @@ function initPitch() {
 function resizePitchCanvas() {
   if (!pitchCanvas) return;
   const rect = pitchCanvas.parentElement.getBoundingClientRect();
-  let w = rect.width || pitchCanvas.clientWidth || 400;
-  let h = rect.height || pitchCanvas.clientHeight || 260;
-  pitchCanvas.width = w * window.devicePixelRatio;
-  pitchCanvas.height = h * window.devicePixelRatio;
-  pitchCtx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+  pitchCanvas.width = rect.width * window.devicePixelRatio;
+  pitchCanvas.height = rect.height * window.devicePixelRatio;
+  pitchCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
 }
 
 function drawPitch() {
   if (!pitchCtx || !pitchCanvas) return;
   
   const w = pitchCanvas.width / window.devicePixelRatio;
-  const h = pitchCanvas.height / window.devicePixelRatio;
-  
-  if (w < 10 || h < 10) { setTimeout(drawPitch, 500); return; }
   const h = pitchCanvas.height / window.devicePixelRatio;
   pitchCtx.clearRect(0, 0, w, h);
 
