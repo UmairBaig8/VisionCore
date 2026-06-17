@@ -84,6 +84,7 @@ def _run_analysis(job_id, video_path, **kwargs):
             video_path=str(video_path),
             emitter=emitter,
             generate_reel_flag=True,
+            stream_mode=True,
             live=True,
             **kwargs,
         )
@@ -161,13 +162,14 @@ async def upload_video(file: UploadFile):
 
 
 @app.post("/analyze")
-def start_analysis(video: str, depth: str = "fast", interval: float = 0.5):
+def start_analysis(video: str, depth: str = "fast", interval: float = 1.0,
+                   live: bool = True):
     video_path = Path(video)
     if not video_path.exists():
         return JSONResponse({"error": f"Video not found: {video}"}, status_code=404)
 
     job_id = str(uuid.uuid4())[:8]
-    emitter = EventEmitter()  # no-op until WS connects
+    emitter = EventEmitter()
     jobs[job_id] = {
         "id": job_id,
         "video": str(video_path),
@@ -178,11 +180,10 @@ def start_analysis(video: str, depth: str = "fast", interval: float = 0.5):
         "orchestrator": None,
     }
 
-    # start analysis immediately in background thread
     thread = threading.Thread(
         target=_run_analysis,
         args=(job_id, video_path),
-        kwargs={"depth": depth, "sample_interval": interval},
+        kwargs={"depth": depth, "sample_interval": interval, "live": live},
         daemon=True,
     )
     thread.start()

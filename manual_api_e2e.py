@@ -30,7 +30,7 @@ def manual_e2e(video_path="videos/10.mp4"):
     print(f"2. Videos: {len(videos)} files")
 
     # 3. start analysis
-    r = requests.post(f"{BASE}/analyze?video={video_path}&depth=fast")
+    r = requests.post(f"{BASE}/analyze?video={video_path}&depth=fast&interval=1.0&live=true")
     if r.status_code != 200:
         print(f"ERROR: {r.json()}")
         return False
