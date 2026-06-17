@@ -1,92 +1,73 @@
-// VidCore Dashboard — WebSocket-powered live UI
+// VidCore Live Dashboard — WebSocket-powered
 const API = '';
-let ws = null;
-let jobId = null;
-let selectedVideo = null;
+let ws = null, jobId = null, selectedVideo = null, filter = 'all';
 
-// ── Init ────────────────────────────────────────────────────────────────
-async function init() {
-  await loadVideos();
-}
+async function init() { await loadVideos(); }
 
 async function loadVideos() {
   const r = await fetch(`${API}/videos`);
   const videos = await r.json();
   const list = document.getElementById('video-list');
-  if (!videos.length) {
-    list.innerHTML = '<div style="color:#8b949e;font-size:12px">No videos found. Upload one above.</div>';
-    return;
-  }
-  list.innerHTML = videos.map(v => {
-    const mb = v.size_mb ? ` (${v.size_mb}MB)` : '';
-    return `<div class="video-item" onclick="selectVideo('${v.path}','${v.name}')" data-path="${v.path}">
-      🎬 ${v.name}${mb}
-    </div>`;
-  }).join('');
+  if (!videos.length) { list.innerHTML = '<div style="color:var(--muted);font-size:12px">No videos. Upload above.</div>'; return; }
+  list.innerHTML = videos.map(v =>
+    `<div class="video-item" onclick="selectVideo('${v.path}','${v.name}')" data-path="${v.path}">🎬 ${v.name}${v.size_mb ? ' ('+v.size_mb+'MB)' : ''}</div>`
+  ).join('');
 }
 
 function selectVideo(path, name) {
   selectedVideo = path;
   document.querySelectorAll('.video-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`[data-path="${path}"]`)?.classList.add('active');
-  document.getElementById('status-text').textContent = `● Selected: ${name}`;
+  document.getElementById('match-title').textContent = name.replace(/_/g,' ').replace('.mp4','').toUpperCase();
+  document.getElementById('match-sub').textContent = 'Ready — press Start Analysis';
 }
 
-// ── Upload ──────────────────────────────────────────────────────────────
 async function uploadVideo() {
   const file = document.getElementById('upload-input').files[0];
   if (!file) return;
-  setStatus('Uploading...', 'uploading');
-  const form = new FormData();
-  form.append('file', file);
-  const r = await fetch(`${API}/upload`, { method: 'POST', body: form });
-  const data = await r.json();
-  setStatus(`Uploaded: ${data.name}`, 'ready');
-  selectedVideo = data.path;
+  const form = new FormData(); form.append('file', file);
+  await fetch(`${API}/upload`, { method: 'POST', body: form });
   await loadVideos();
 }
 
-// ── Analysis + WebSocket ────────────────────────────────────────────────
+// ── Analysis ────────────────────────────────────────────────────────────
 async function startAnalysis() {
   if (!selectedVideo) { alert('Select a video first'); return; }
-  if (jobId) { stopAnalysis(); }
+  stopAnalysis();
 
   const depth = document.getElementById('depth-select').value;
-  setStatus('Starting...', 'running');
   document.getElementById('analyze-btn').disabled = true;
+  resetUI();
 
   const r = await fetch(`${API}/analyze?video=${encodeURIComponent(selectedVideo)}&depth=${depth}&interval=1.0`);
   const job = await r.json();
   jobId = job.job_id;
 
-  // connect WebSocket
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}/ws/${jobId}`);
 
-  ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    handleEvent(data);
-  };
+  ws.onmessage = e => handleEvent(JSON.parse(e.data));
+  ws.onclose = () => { document.getElementById('analyze-btn').disabled = false; };
+  ws.onerror = () => setProgress('WebSocket error');
 
-  ws.onclose = () => {
-    document.getElementById('analyze-btn').disabled = false;
-    if (document.getElementById('status-text').textContent.includes('Running')) {
-      setStatus('Analysis complete', 'complete');
-    }
-  };
-
-  ws.onerror = () => setStatus('WebSocket error', 'error');
-
-  // start polling status for context updates
   pollStatus();
 }
 
 function stopAnalysis() {
   if (ws) { ws.close(); ws = null; }
   if (jobId) { fetch(`${API}/jobs/${jobId}`, { method: 'DELETE' }); jobId = null; }
-  setStatus('Stopped', 'ready');
   document.getElementById('analyze-btn').disabled = false;
-  document.getElementById('progress-fill').style.width = '0%';
+  setProgress('0%', 0);
+}
+
+function resetUI() {
+  document.getElementById('events').innerHTML = '<div style="color:var(--muted);font-size:12px">Connecting...</div>';
+  document.getElementById('timeline-bar').innerHTML = '';
+  document.getElementById('clips-row').innerHTML = '';
+  document.getElementById('score-val').textContent = '0-0';
+  document.getElementById('phase-val').textContent = '--';
+  document.getElementById('events-val').textContent = '0';
+  document.getElementById('report-panel').innerHTML = '<span style="color:var(--muted)">Analysis in progress...</span>';
 }
 
 async function pollStatus() {
@@ -94,144 +75,132 @@ async function pollStatus() {
   try {
     const r = await fetch(`${API}/status/${jobId}`);
     const s = await r.json();
-    if (s.sport) document.getElementById('sport-val').textContent = s.sport;
+    if (s.sport && s.sport !== 'unknown') document.getElementById('sport-val').textContent = s.sport;
     if (s.score) document.getElementById('score-val').textContent = s.score;
-    if (s.key_events_count !== undefined) document.getElementById('events-val').textContent = s.key_events_count;
-    if (s.status === 'complete' || s.status === 'error') {
-      setStatus(s.status === 'error' ? 'Error: ' + s.error : 'Complete', s.status);
-      document.getElementById('analyze-btn').disabled = false;
-      loadReport();
-      loadReels();
-      return;
-    }
+    if (s.key_events_count) document.getElementById('events-val').textContent = s.key_events_count;
+    if (s.status === 'complete') { onComplete(); return; }
+    if (s.status === 'error') { document.getElementById('analyze-btn').disabled = false; return; }
     setTimeout(pollStatus, 3000);
-  } catch(e) {
-    setTimeout(pollStatus, 3000);
-  }
+  } catch(e) { setTimeout(pollStatus, 3000); }
 }
 
-// ── Event Handlers ──────────────────────────────────────────────────────
+// ── WebSocket Events ────────────────────────────────────────────────────
 function handleEvent(data) {
-  const eventsDiv = document.getElementById('events');
-
   switch(data.type) {
     case 'connected':
-      setStatus('Connected — analyzing...', 'running');
-      clearEvents();
+      document.getElementById('events').innerHTML = '';
       break;
-
-    case 'scene':
-      // scene events are high-frequency — only update phase/scoreboard
-      break;
-
     case 'key_event':
-      if (data.event_type) {
-        addEvent(data);
-        updateReelPlayer();
-      }
+      addEvent(data);
+      addTimelineMarker(data);
+      updateReelPlayer();
       break;
-
-    case 'score':
-      document.getElementById('score-val').textContent = `${data.home}-${data.away}`;
-      break;
-
-    case 'phase':
-      document.getElementById('phase-val').textContent = data.phase || '--';
-      break;
-
     case 'clip':
       updateReelPlayer();
       break;
-
+    case 'score':
+      document.getElementById('score-val').textContent = `${data.home}-${data.away}`;
+      break;
+    case 'phase':
+      document.getElementById('phase-val').textContent = data.phase || '--';
+      break;
     case 'progress':
-      document.getElementById('progress-fill').style.width = `${data.pct}%`;
-      document.getElementById('events-val').textContent = data.key_events_count || 0;
+      setProgress(`${data.pct}%`, data.pct);
       break;
-
     case 'complete':
-      setStatus('Complete', 'complete');
-      document.getElementById('analyze-btn').disabled = false;
-      document.getElementById('progress-fill').style.width = '100%';
-      loadReport();
-      loadReels();
-      break;
-
-    case 'error':
-      setStatus('Error: ' + data.message, 'error');
+      onComplete();
       break;
   }
 }
 
 function addEvent(ev) {
-  const eventsDiv = document.getElementById('events');
-  if (eventsDiv.querySelector('.waiting')) eventsDiv.innerHTML = '';
+  const el = document.getElementById('events');
+  let css = '';
+  if ((ev.event_type||'').includes('GOAL') || ev.event_type==='SIX'||ev.event_type==='FOUR') css='goal';
+  else if ((ev.event_type||'').includes('FOUL')||ev.event_type==='WICKET') css='foul';
+  else if ((ev.event_type||'').includes('CARD')) css='card-y';
+  else if ((ev.event_type||'').includes('VAR')||(ev.event_type||'').includes('DRS')) css='var';
 
-  const cssClass = ev.event_type?.includes('GOAL') ? 'goal' :
-                   ev.event_type?.includes('CARD') || ev.event_type?.includes('FOUL') ? 'card' : '';
+  if (filter !== 'all') {
+    const et = ev.event_type||'';
+    const match = filter==='CARD' ? et.includes('CARD') : et.includes(filter);
+    if (!match) return;
+  }
 
-  const team = ev.team ? ` (${ev.team})` : '';
+  const team = ev.team ? ` <span style="color:var(--muted)">(${ev.team})</span>` : '';
   const div = document.createElement('div');
-  div.className = `event ${cssClass}`;
-  div.innerHTML = `<span class="ts">${ev.timestamp || '?'}</span>
-                   <span class="type">${ev.event_type}</span>${team}`;
-  eventsDiv.prepend(div);
+  div.className = `event ${css}`;
+  div.setAttribute('data-filter', ev.event_type);
+  div.innerHTML = `<div class="ts">${ev.timestamp||'?'}</div>
+                   <div class="et">${ev.event_type}${team}</div>`;
+  el.prepend(div);
 
-  document.getElementById('events-val').textContent =
-    parseInt(document.getElementById('events-val').textContent || 0) + 1;
+  document.getElementById('events-val').textContent = parseInt(document.getElementById('events-val').textContent||0) + 1;
 }
 
-function clearEvents() {
-  document.getElementById('events').innerHTML = '<div class="waiting" style="color:#8b949e;font-size:12px">Waiting for events...</div>';
-  document.getElementById('events-val').textContent = '0';
+function addTimelineMarker(ev) {
+  const bar = document.getElementById('timeline-bar');
+  const et = ev.event_type||'';
+  const colors = {'GOAL':'goal','GOAL_ATTEMPT':'goal','FOUL':'foul','YELLOW_CARD':'card-y','RED_CARD':'foul','VAR_CHECK':'var'};
+  const m = document.createElement('div');
+  m.className = `marker ${colors[et]||''}`;
+  m.style.left = (Math.random()*80+10) + '%';
+  m.title = `[${ev.timestamp}] ${et}`;
+  bar.appendChild(m);
 }
 
-// ── Reel Player ─────────────────────────────────────────────────────────
 function updateReelPlayer() {
   if (!selectedVideo || !jobId) return;
   const name = selectedVideo.split('/').pop().replace('.mp4','');
   const player = document.getElementById('reel-player');
-  const label = document.getElementById('reel-label');
-  player.querySelector('source').src = `/output/reels/live/${name}_reel.mp4?t=${Date.now()}`;
-  player.load();
-  player.play().catch(() => {});
-  label.textContent = 'Live reel — auto-updating as events are detected';
+  player.querySelector('source')?.remove();
+  const src = document.createElement('source');
+  src.src = `/output/reels/live/${name}_reel.mp4?t=${Date.now()}`;
+  src.type = 'video/mp4';
+  player.appendChild(src);
+  player.load(); player.play().catch(()=>{});
 }
 
-async function loadReels() {
-  if (!jobId) return;
+function setFilter(f, el) {
+  filter = f;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('events').querySelectorAll('.event').forEach(e => {
+    const et = e.getAttribute('data-filter')||'';
+    e.style.display = (f==='all' || et.includes(f)) ? '' : 'none';
+  });
+}
+
+async function onComplete() {
+  document.getElementById('analyze-btn').disabled = false;
+  setProgress('100%', 100);
+  document.getElementById('phase-val').textContent = 'complete';
+
   try {
-    const r = await fetch(`${API}/reels/${jobId}`);
-    const data = await r.json();
-    if (data.reel_url) {
-      const player = document.getElementById('reel-player');
-      player.querySelector('source').src = data.reel_url;
-      player.load();
-      document.getElementById('reel-label').textContent =
-        `Final reel — ${data.count} clips`;
-    }
+    const ctx = await fetch(`${API}/context/${jobId}`).then(r=>r.json());
+    if (ctx.sport) document.getElementById('sport-val').textContent = ctx.sport;
+    if (ctx.score) document.getElementById('score-val').textContent = ctx.score;
+    document.getElementById('info-list').innerHTML = [
+      `<li>Sport: <b>${ctx.sport||'?'}</b></li>`,
+      `<li>Type: <b>${ctx.type||'?'}</b></li>`,
+      `<li>Teams: <b>${(ctx.teams||[]).join(' vs ')||'?'}</b></li>`,
+    ].join('');
+    document.getElementById('stats-list').innerHTML = [
+      `<li>Key Events: <b>${ctx.key_events_count||0}</b></li>`,
+      `<li>Phase: <b>${ctx.phase||'?'}</b></li>`,
+      `<li>Momentum: <b>${ctx.momentum||0}</b></li>`,
+    ].join('');
+  } catch(e) {}
+
+  try {
+    const md = await fetch(`${API}/report/${jobId}`).then(r=>r.ok?r.text():null);
+    if (md) document.getElementById('report-panel').innerHTML = md;
   } catch(e) {}
 }
 
-// ── Report ──────────────────────────────────────────────────────────────
-async function loadReport() {
-  if (!jobId) return;
-  try {
-    const r = await fetch(`${API}/report/${jobId}`);
-    if (r.ok) {
-      const md = await r.text();
-      const panel = document.getElementById('report-panel');
-      panel.style.display = 'block';
-      panel.innerHTML = `<h3>📋 Match Report</h3>` + md;
-    }
-  } catch(e) {}
+function setProgress(label, pct) {
+  document.getElementById('progress-label').textContent = label;
+  document.getElementById('progress-fill').style.width = (pct||0) + '%';
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────
-function setStatus(text, state) {
-  const el = document.getElementById('status-text');
-  const icons = { ready: '●', running: '🟢', complete: '✅', error: '❌', uploading: '⬆️' };
-  el.textContent = `${icons[state] || '●'} ${text}`;
-}
-
-// ── Start ───────────────────────────────────────────────────────────────
 init();
