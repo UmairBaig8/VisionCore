@@ -84,6 +84,31 @@ def _load_type_prompts():
     return {}
 
 
+def _detect_sport(client, video_path):
+    sport_prompt_path = agents_dir() / "sport_classifier.md"
+    if not sport_prompt_path.exists():
+        return {"sport": "generic", "confidence": 0.0}
+    sport_prompt = sport_prompt_path.read_text()
+    for ts, frame in sample_frames(video_path, 3.0):
+        b64 = encode_frame(frame)
+        if not b64:
+            continue
+        result = _ask_with_retry(client, sport_prompt, b64)
+        if result:
+            parsed = _parse_classification(result)  # reuses same JSON parser
+            if "sport" in parsed:
+                return parsed
+        break
+    return {"sport": "generic", "confidence": 0.0}
+
+
+def _load_sport_events_prompt(sport):
+    path = agents_dir() / "sports" / f"{sport}_events.md"
+    if path.exists():
+        return path.read_text()
+    return None
+
+
 def _parse_classification(raw_text):
     try:
         text = raw_text.strip()
@@ -142,7 +167,9 @@ class VideoOrchestrator:
         self.classify = classify
         self.location = location
         self.video_type = None
+        self.sport = None
         self.geo = None
+        self.key_events = []
 
     def _run_parallel(self, client, tasks):
         results = {}
@@ -187,13 +214,20 @@ class VideoOrchestrator:
             else:
                 print(" → unknown")
 
+        # ── sport detection ──
+        print("Detecting sport", end="", flush=True)
+        self.sport = _detect_sport(client, self.video_path)
+        sport_id = self.sport.get("sport", "generic")
+        print(f" → {sport_id} (confidence: {self.sport.get('confidence', 0):.0%})")
+
         vt = self.video_type["video_type"]
 
         # ── type-specific prompts ──
         type_prompts = _load_type_prompts().get(vt, {})
 
         scene_prompt = agents.get("scene_detector", "")
-        event_prompt = agents.get("event_detector", "")
+        sport_events_prompt = _load_sport_events_prompt(sport_id)
+        event_prompt = sport_events_prompt or agents.get("event_detector", "")
         commentary_prompt = agents.get("commentary_agent", "")
         reasoning_prompt = agents.get("reasoning_agent", "")
         summary_prompt = type_prompts.get("summary_prompt") or agents.get("summary_agent", "")
@@ -232,6 +266,11 @@ class VideoOrchestrator:
                 event_str = _ask_with_retry(
                     client, f"{event_prompt}\n\nFrame: {scene_desc}"
                 )
+                if event_str and sport_events_prompt:
+                    parsed_events = _parse_classification(event_str)
+                    for ev in parsed_events.get("events", []):
+                        ev["timestamp"] = f"{timestamp:.1f}s"
+                        self.key_events.append(ev)
 
             if do_analysis and event_str:
                 parallel_tasks = {}
@@ -271,7 +310,7 @@ class VideoOrchestrator:
                 done = int(bar_len * processed / max(total_frames, 1))
                 bar = f"[{'#' * done}{'-' * (bar_len - done)}]"
                 pct = processed / max(total_frames, 1) * 100
-                label = f"depth={self.depth} type={vt}"
+                label = f"depth={self.depth} type={vt} sport={sport_id}"
                 print(f"\r  {bar} {pct:.0f}% ({processed}/{total_frames}) {label}",
                       end="", flush=True)
 
@@ -314,6 +353,18 @@ class VideoOrchestrator:
                 header += f"**League:** {geo['league']}\n"
             if geo.get("teams"):
                 header += f"**Teams:** {', '.join(geo['teams'])}\n"
+
+        if self.key_events:
+            header += f"\n## Key Events ({len(self.key_events)})\n\n"
+            for ev in self.key_events:
+                ts = ev.get("timestamp", "?")
+                et = ev.get("type", "event")
+                team = ev.get("team", ev.get("batsman", ev.get("player", "")))
+                runs = ev.get("runs", ev.get("points", ""))
+                detail = f" — {team}" if team else ""
+                detail += f" ({runs})" if runs else ""
+                header += f"- **[{ts}]** {et}{detail}\n"
+
         header += f"**Evidence:** {self.video_type.get('evidence', '')}\n\n"
         if highlights:
             header += f"## Highlights\n\n{highlights}\n\n---\n\n"

@@ -258,6 +258,25 @@ def test_classification():
     test("has training prompts", lambda: "training" in prompts)
 
 
+# ─── Sport detection ────────────────────────────────────────────────────────
+
+def test_sport():
+    print("\nSport Detection")
+    from core.orchestrator import _load_sport_events_prompt
+
+    prompts = {
+        "football": _load_sport_events_prompt("football"),
+        "cricket": _load_sport_events_prompt("cricket"),
+        "basketball": _load_sport_events_prompt("basketball"),
+        "tennis": _load_sport_events_prompt("tennis"),
+    }
+    for sport, prompt in prompts.items():
+        test(f"sport_events/{sport}_events.md loaded", lambda p=prompt: p is not None and len(p) > 50)
+        test(f"  has event types for {sport}", lambda p=prompt, s=sport: "Event" in p and ("GOAL" in p or "SIX" in p or "DUNK" in p or "ACE" in p))
+
+    test("unknown sport returns None", lambda: _load_sport_events_prompt("quidditch") is None)
+
+
 # ─── Video loader ───────────────────────────────────────────────────────────
 
 def test_video_loader():
@@ -366,6 +385,7 @@ if __name__ == "__main__":
     test_models()
     test_csv_writer()
     test_classification()
+    test_sport()
     test_video_loader()
     test_orchestrator()
     test_format_events()
