@@ -377,6 +377,11 @@ class VideoOrchestrator:
         processed = 0
         video_stem = Path(self.video_path).stem
 
+        # live mode: progress is wall-clock, not frame count
+        video_duration = None
+        if self.live:
+            video_duration = total_frames * self.sample_interval
+
         # ── live reel builder (generates clips as events happen) ──
         live_reel = None
         if self.generate_reel:
@@ -530,7 +535,7 @@ class VideoOrchestrator:
                 bar_len = 30
                 done = int(bar_len * processed / max(total_frames, 1))
                 bar = f"[{'#' * done}{'-' * (bar_len - done)}]"
-                pct = processed / max(total_frames, 1) * 100
+                pct = min(timestamp / video_duration * 100, 100) if video_duration else processed / max(total_frames, 1) * 100
                 events_str = ""
                 if key_events:
                     events_str = " | " + ",".join(e["type"] for e in key_events[:3])
@@ -538,8 +543,8 @@ class VideoOrchestrator:
                       f"{self.ctx.phase} {self.ctx.score_string()}{events_str}",
                       end="", flush=True)
 
-            self.emitter.on_progress(processed, total_frames,
-                                     int(processed / max(total_frames, 1) * 100))
+            pct = int(min(timestamp / video_duration * 100, 100)) if video_duration else int(processed / max(total_frames, 1) * 100)
+            self.emitter.on_progress(processed, total_frames, pct)
 
             elapsed = time.time() - t_start
             parts = [f"total={elapsed:.1f}s", f"scene={t_scene:.1f}s"]
