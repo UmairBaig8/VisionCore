@@ -64,6 +64,10 @@ def analyze(
         0.5, "--interval", "-i",
         help="Frame sampling interval in seconds"
     ),
+    depth: str = typer.Option(
+        "full", "--depth", "-d",
+        help="Analysis depth: scene-only, fast, full"
+    ),
 ):
     """Analyze a video"""
     from pathlib import Path
@@ -73,9 +77,14 @@ def analyze(
         typer.echo(f"Video not found: {video}")
         raise typer.Exit(1)
 
+    if depth not in ("scene-only", "fast", "full"):
+        typer.echo(f"Invalid depth: {depth}. Use: scene-only, fast, full")
+        raise typer.Exit(1)
+
     orchestrator = VideoOrchestrator(
         video_path=str(video_path),
         sample_interval=interval,
+        depth=depth,
     )
     orchestrator.run()
 
@@ -84,6 +93,10 @@ def analyze(
 def stream(
     video: str,
     interval: float = typer.Option(0.5),
+    depth: str = typer.Option(
+        "fast", "--depth", "-d",
+        help="Analysis depth: scene-only, fast, full"
+    ),
 ):
     """Live event stream"""
     from pathlib import Path
@@ -93,9 +106,14 @@ def stream(
         typer.echo(f"Video not found: {video}")
         raise typer.Exit(1)
 
+    if depth not in ("scene-only", "fast", "full"):
+        typer.echo(f"Invalid depth: {depth}. Use: scene-only, fast, full")
+        raise typer.Exit(1)
+
     orchestrator = VideoOrchestrator(
         video_path=str(video_path),
         sample_interval=interval,
+        depth=depth,
         stream_mode=True,
     )
     orchestrator.run()

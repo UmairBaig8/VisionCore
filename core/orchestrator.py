@@ -1,5 +1,6 @@
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -7,7 +8,6 @@ import requests
 from core.agent_loader import AgentLoader
 from core.config import load_config
 from core.llm_client import VLLMClient
-from core.models import Event
 
 from skills.frame_sampler import sample_frames, count_frames
 from skills.frame_encoder import encode_frame
@@ -48,11 +48,26 @@ def _format_events_for_summary(timeline):
 class VideoOrchestrator:
 
     def __init__(self, video_path, sample_interval=0.5,
-                 stream_mode=False, report_only=False):
+                 depth="full", stream_mode=False, report_only=False):
         self.video_path = video_path
         self.sample_interval = sample_interval
+        self.depth = depth
         self.stream_mode = stream_mode
         self.report_only = report_only
+
+    def _run_parallel(self, client, tasks):
+        results = {}
+        with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+            futures = {pool.submit(_ask_with_retry, client, p, i): k
+                       for k, (p, i) in tasks.items()}
+            for f in as_completed(futures):
+                key = futures[f]
+                try:
+                    results[key] = f.result()
+                except Exception as e:
+                    results[key] = None
+                    print(f"  [{key}] failed: {e}", file=sys.stderr)
+        return results
 
     def run(self):
         cfg = load_config()
@@ -66,6 +81,9 @@ class VideoOrchestrator:
         reasoning_prompt = agents.get("reasoning_agent", "")
         summary_prompt = agents.get("summary_agent", "")
         highlight_prompt = agents.get("highlight_agent", "")
+
+        do_event = self.depth in ("fast", "full")
+        do_analysis = self.depth == "full"
 
         total_frames = count_frames(self.video_path, self.sample_interval)
         processed = 0
@@ -83,44 +101,37 @@ class VideoOrchestrator:
                 continue
 
             event_str = None
-            if event_prompt:
-                event_str = _ask_with_retry(
-                    client,
-                    f"{event_prompt}\n\nFrame: {scene_desc}"
-                )
-
             reasoning_str = None
-            if reasoning_prompt and event_str:
-                reasoning_str = _ask_with_retry(
-                    client,
-                    f"{reasoning_prompt}\n\nObservation: {event_str}"
-                )
-
             commentary_str = None
-            if commentary_prompt and event_str:
-                commentary_str = _ask_with_retry(
-                    client,
-                    f"{commentary_prompt}\n\nEvent: {event_str}"
+
+            if do_event and event_prompt:
+                event_str = _ask_with_retry(
+                    client, f"{event_prompt}\n\nFrame: {scene_desc}"
                 )
 
-            event = Event(
-                timestamp=f"{timestamp:.1f}s",
-                event_type="scene",
-                description=scene_desc,
-                confidence=1.0,
-            )
+            if do_analysis and event_str:
+                parallel_tasks = {}
+                if reasoning_prompt:
+                    parallel_tasks["reasoning"] = (
+                        f"{reasoning_prompt}\n\nObservation: {event_str}", None
+                    )
+                if commentary_prompt:
+                    parallel_tasks["commentary"] = (
+                        f"{commentary_prompt}\n\nEvent: {event_str}", None
+                    )
+                if parallel_tasks:
+                    r = self._run_parallel(client, parallel_tasks)
+                    reasoning_str = r.get("reasoning")
+                    commentary_str = r.get("commentary")
 
             event_dict = {
                 "timestamp": f"{timestamp:.1f}s",
                 "result": scene_desc,
                 "scene": scene_desc,
+                "event": event_str or "",
+                "reasoning": reasoning_str or "",
+                "commentary": commentary_str or "",
             }
-            if event_str:
-                event_dict["event"] = event_str
-            if reasoning_str:
-                event_dict["reasoning"] = reasoning_str
-            if commentary_str:
-                event_dict["commentary"] = commentary_str
 
             timeline.add(event_dict)
 
@@ -128,12 +139,15 @@ class VideoOrchestrator:
                 print(f"[{timestamp:.1f}s] {scene_desc[:120]}")
                 if commentary_str:
                     print(f"  > {commentary_str[:120]}")
+                if event_str:
+                    print(f"  * {event_str[:120]}")
             elif not self.report_only:
                 bar_len = 30
                 done = int(bar_len * processed / max(total_frames, 1))
                 bar = f"[{'#' * done}{'-' * (bar_len - done)}]"
                 pct = processed / max(total_frames, 1) * 100
-                print(f"\r  {bar} {pct:.0f}% ({processed}/{total_frames})",
+                label = f"depth={self.depth}"
+                print(f"\r  {bar} {pct:.0f}% ({processed}/{total_frames}) {label}",
                       end="", flush=True)
 
         if not self.stream_mode and not self.report_only:
