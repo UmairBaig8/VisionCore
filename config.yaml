@@ -1,4 +1,4 @@
-vllm_endpoint: https://notebooks.amd.com/jupyter-hack-team-1277-260617112306-059ad7ae/proxy/8000/v1/chat/completions
+vllm_endpoint: http://localhost:8000/v1/chat/completions
 
 model: Qwen/Qwen3-VL-32B-Instruct
 

@@ -153,15 +153,14 @@ start_vllm() {
     VLLM_CMD="vllm serve $MODEL"
     VLLM_CMD="$VLLM_CMD --host 0.0.0.0"
     VLLM_CMD="$VLLM_CMD --port $VLLM_PORT"
+    VLLM_CMD="$VLLM_CMD --dtype ${DTYPE:-auto}"
+    VLLM_CMD="$VLLM_CMD --max-model-len ${MAX_MODEL_LEN:-32768}"
 
     if [ "$HAS_GPU" = false ]; then
-        # CPU-only — expect slowness, but works for dev
-        VLLM_CMD="$VLLM_CMD --dtype half"
-        VLLM_CMD="$VLLM_CMD --max-model-len 4096"
         VLLM_CMD="$VLLM_CMD --cpu-offload-gb 16"
-        echo "  (CPU-only mode — set gpu_memory_utilization for GPU VMs)"
+        echo "  (CPU-only mode)"
     else
-        VLLM_CMD="$VLLM_CMD --gpu-memory-utilization 0.90"
+        VLLM_CMD="$VLLM_CMD --gpu-memory-utilization ${GPU_MEM_UTIL:-0.90}"
     fi
 
     echo ""
@@ -222,7 +221,7 @@ main() {
         echo "══════════════════════════════════════════"
         echo " Deps installed. Start vLLM manually:"
         echo "   source .venv/bin/activate"
-        echo "   vllm serve $MODEL --host 0.0.0.0 --port $VLLM_PORT"
+        echo "   vllm serve $MODEL --host 0.0.0.0 --port $VLLM_PORT --dtype auto --max-model-len 32768 --gpu-memory-utilization 0.90"
         echo "══════════════════════════════════════════"
     fi
 }
