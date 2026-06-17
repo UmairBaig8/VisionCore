@@ -23,6 +23,12 @@ from core.paths import output_dir, videos_dir, project_root
 
 app = FastAPI(title="VidCore API", version="1.0")
 
+# static files for dashboard
+from fastapi.staticfiles import StaticFiles as _SM
+static_ui = Path(__file__).parent / "static"
+if static_ui.exists():
+    app.mount("/static", _SM(directory=str(static_ui)), name="static_ui")
+
 # CORS — allow browser dashboards
 app.add_middleware(
     CORSMiddleware,
@@ -126,7 +132,8 @@ def _run_analysis(job_id, video_path, **kwargs):
 
 @app.get("/")
 def root():
-    return {"app": "VidCore API", "docs": "/docs", "endpoints": [
+    return {"app": "VidCore API", "dashboard": "/dashboard",
+            "docs": "/docs", "endpoints": [
         "POST /analyze", "WS /ws/{job_id}",
         "GET /jobs", "GET /status/{job_id}", "DELETE /jobs/{job_id}",
         "GET /report/{job_id}", "GET /csv/{job_id}",
@@ -134,6 +141,12 @@ def root():
         "GET /reels/{job_id}", "GET /videos", "POST /upload",
         "GET /health", "GET /output/{path}",
     ]}
+
+
+@app.get("/dashboard")
+def dashboard():
+    from fastapi.responses import FileResponse
+    return FileResponse(static_ui / "index.html")
 
 
 @app.get("/health")
