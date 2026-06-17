@@ -389,7 +389,7 @@ class VideoOrchestrator:
             print()
 
         video_stem = Path(self.video_path).stem
-        csv_path = save_csv(timeline.events, video_stem)
+        csv_path = save_csv(timeline.events, video_stem, self.ctx)
 
         # ── summary generation ──
         highlights = ""

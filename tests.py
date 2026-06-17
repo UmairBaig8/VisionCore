@@ -225,7 +225,7 @@ def test_csv_writer():
     path = save_csv(events, "test_csv")
     test("creates csv file", lambda: path.exists())
     content = path.read_text()
-    test("has header", lambda: "timestamp,scene,event,reasoning,commentary" in content)
+    test("has header", lambda: "timestamp,scene,phase,score,key_events" in content)
     test("has row 1", lambda: "outdoor" in content and "person walking" in content)
     test("has row 2", lambda: "indoor" in content)
     path.unlink()
