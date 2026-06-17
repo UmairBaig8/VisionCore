@@ -289,8 +289,8 @@ function drawPitch() {
 
 function drawSoccerField(w, h) {
   const pad = 12;
-  const fw = w - pad * 2;
-  const fh = h - pad * 2;
+  const fw = Math.max(w - pad * 2, 10);
+  const fh = Math.max(h - pad * 2, 10);
 
   pitchCtx.strokeStyle = 'rgba(255,255,255,0.18)';
   pitchCtx.lineWidth = 1.5;
@@ -306,7 +306,7 @@ function drawSoccerField(w, h) {
 
   // Center Circle
   pitchCtx.beginPath();
-  pitchCtx.arc(w / 2, h / 2, Math.min(fw, fh) * 0.15, 0, Math.PI * 2);
+    pitchCtx.arc(w / 2, h / 2, Math.max(Math.min(fw, fh) * 0.15, 2), 0, Math.PI * 2);
   pitchCtx.stroke();
 
   // Penalty Areas (Left / Right)
@@ -376,7 +376,7 @@ function drawDynamicPhaseHighlights(w, h) {
     // Highlight Center Circle
     pitchCtx.fillStyle = 'rgba(37, 99, 235, 0.08)';
     pitchCtx.beginPath();
-    pitchCtx.arc(w / 2, h / 2, Math.min(fw, fh) * 0.15, 0, Math.PI * 2);
+  pitchCtx.arc(w / 2, h / 2, Math.max(Math.min(fw, fh) * 0.15, 2), 0, Math.PI * 2);
     pitchCtx.fill();
   } else if (currentPhase === 'commercial' || currentPhase === 'half_time') {
     // Dim the pitch
