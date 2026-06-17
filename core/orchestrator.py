@@ -400,7 +400,9 @@ class VideoOrchestrator:
                 continue
 
             # step 1: scene detection (always)
+            t_scene = time.time()
             scene_desc = _ask_with_retry(client, scene_prompt, image_b64)
+            t_scene = time.time() - t_scene
             if scene_desc is None:
                 continue
 
@@ -427,10 +429,13 @@ class VideoOrchestrator:
             key_events = []
 
             # step 3: call only routed agents
+            t_event = 0.0
             if do_event and route["event_detector"] and event_prompt:
+                t0 = time.time()
                 event_str = _ask_with_retry(
                     client, f"{event_prompt}\n\nFrame: {scene_desc}"
                 )
+                t_event = time.time() - t0
                 if event_str and sport_events_prompt:
                     parsed = _parse_json_safe(event_str)
                     events = parsed.get("events", [])
@@ -461,6 +466,7 @@ class VideoOrchestrator:
                     if "phase" in parsed:
                         self.ctx.update_phase(parsed["phase"])
 
+            t_analysis = 0.0
             if do_analysis and key_events and route["reasoning"]:
                 parallel_tasks = {}
                 if reasoning_prompt:
@@ -476,9 +482,11 @@ class VideoOrchestrator:
                         None
                     )
                 if parallel_tasks:
+                    t0 = time.time()
                     r = self._run_parallel(client, parallel_tasks)
                     reasoning_str = r.get("reasoning")
                     commentary_str = r.get("commentary")
+                    t_analysis = time.time() - t0
 
             # ── immediate clip generation for live reel ──
             if live_reel and key_events:
@@ -540,7 +548,12 @@ class VideoOrchestrator:
                                      int(processed / max(total_frames, 1) * 100))
 
             elapsed = time.time() - t_start
-            print(f"\n  → frame {processed} complete in {elapsed:.2f}s\n", flush=True)
+            parts = [f"total={elapsed:.1f}s", f"scene={t_scene:.1f}s"]
+            if t_event:
+                parts.append(f"event={t_event:.1f}s")
+            if t_analysis:
+                parts.append(f"analysis={t_analysis:.1f}s")
+            print(f"\n  → frame {processed} [{', '.join(parts)}] complete\n", flush=True)
 
         if not self.stream_mode and not self.report_only:
             print()
