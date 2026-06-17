@@ -451,8 +451,6 @@ class VideoOrchestrator:
             _update_context_from_scene(self.ctx, scene_desc, skip_score=sb_score is not None)
             if self.ctx.score_string() != old_score:
                 self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
-            if self.ctx.phase != old_phase and not self.ctx.phase_changed:
-                pass  # phase_changed is set in context.update_phase
 
             # step 2: router decides what else to call
             route = router.route(scene_desc, processed)
@@ -535,6 +533,10 @@ class VideoOrchestrator:
             if live_reel and key_events:
                 for ev in key_events:
                     live_reel.add_event(ev)
+
+            # emit phase change if it happened this frame
+            if self.ctx.phase != old_phase:
+                self.emitter.on_phase_change(self.ctx.phase)
 
             event_dict = {
                 "timestamp": f"{timestamp:.1f}s",
