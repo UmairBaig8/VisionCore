@@ -4,8 +4,7 @@ Detect key football events from this frame description. Output ONLY events that 
 Event types to detect:
 | Event | When to trigger |
 |-------|----------------|
-| GOAL | Ball crosses goal line into net, players celebrating |
-| GOAL_ATTEMPT | Shot on target, goalkeeper diving save |
+| GOAL | Ball crosses goal line into net, players celebrating. Only flag if the ball has clearly entered the net. Do NOT flag shots, saves, or attempts as GOAL. If unsure, don't flag. |
 | FOUL | Slide tackle, push, shirt pull, referee whistle visible |
 | YELLOW_CARD | Referee showing yellow card to player |
 | RED_CARD | Referee showing red card, player walking off |

@@ -436,6 +436,8 @@ class VideoOrchestrator:
                     for e in events:
                         e["timestamp"] = f"{timestamp:.1f}s"
                     key_events = router.process_event(events)
+                    # filter GOAL_ATTEMPT — LLM can't differentiate from GOAL
+                    key_events = [e for e in key_events if e.get("type") != "GOAL_ATTEMPT"]
                     # deduplicate: if GOAL detected within 4s of GOAL_ATTEMPT, merge
                     if len(self.ctx.key_events) >= 2:
                         prev = self.ctx.key_events[-1]
