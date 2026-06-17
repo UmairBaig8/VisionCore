@@ -129,6 +129,10 @@ def stream(
         None, "--location",
         help="Manual location override"
     ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v",
+        help="Show agent routing decisions per frame"
+    ),
 ):
     """Live event stream"""
     from pathlib import Path
@@ -150,6 +154,7 @@ def stream(
         live=live,
         classify=not no_classify,
         location=location,
+        verbose=verbose,
     )
     orchestrator.run()
 
