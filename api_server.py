@@ -81,12 +81,6 @@ class WebSocketEmitter(EventEmitter):
                      "player": event.get("player", ""),
                      "description": event.get("global_time", "")})
 
-    def on_reasoning(self, timestamp, text):
-        self._send({"type": "reasoning", "timestamp": timestamp, "text": text[:500]})
-
-    def on_commentary(self, timestamp, text):
-        self._send({"type": "commentary", "timestamp": timestamp, "text": text[:500]})
-
     def on_clip_generated(self, event_type, timestamp, path, total_clips):
         self._send({"type": "clip", "event_type": event_type,
                      "timestamp": timestamp, "path": path,

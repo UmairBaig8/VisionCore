@@ -877,15 +877,6 @@
     .check-row.done .check-dot {
       background: var(--green); box-shadow: 0 0 8px var(--green);
     }
-
-    .insight-row {
-      padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px;
-      animation: slideIn .3s ease;
-    }
-    .insight-label { font-weight: 700; color: var(--blue); margin-right: 6px; }
-    .insight-ts { color: var(--muted); font-size: 10px; }
-    .insight-text { color: var(--text); margin-top: 4px; line-height: 1.5; }
-
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; }}
 
     /* ── AGENT TELEMETRY MONITOR ── */
@@ -1312,14 +1303,9 @@
                 <div class="panel-title">🎬 Main Analytical Stream</div>
                 <div class="player-btn-group">
                   <button class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;" onclick="toggleMobileCrop()">📱 9:16 Social Overlay</button>
+                </div>
               </div>
-
-              <div class="insights-section" id="agent-insights" style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
-                <div class="panel-title" style="font-size:11px;margin-bottom:8px">🧠 Agent Insights (Full Mode)</div>
-                <div class="empty-state" style="font-size:11px">Switch to Full Analysis to see reasoning & commentary</div>
-              </div>
-
-            </div>
+              
               <div class="player-window" id="player-window">
                 <div class="player-placeholder" id="player-placeholder">
                   <div class="player-spinner" style="display:none;" id="player-spinner"></div>
@@ -1988,18 +1974,6 @@ function markCheck(id, val) {
   if (el) { el.classList.add('done'); el.querySelector('.check-dot').textContent = '✓'; }
 }
 
-function addAgentInsight(label, ts, text) {
-  const el = document.getElementById('agent-insights');
-  if (!el) return;
-  if (el.querySelector('.empty-state')) el.innerHTML = '';
-  const div = document.createElement('div');
-  div.className = 'insight-row';
-  div.innerHTML = `<span class="insight-label">${label}</span>
-                   <span class="insight-ts">${ts}</span>
-                   <div class="insight-text">${text.substring(0, 300)}</div>`;
-  el.prepend(div);
-}
-
 // ── PLAY DETECT OVERLAYS & 9:16 CROP ──
 function toggleMobileCrop() {
   isMobileCropActive = !isMobileCropActive;
@@ -2231,14 +2205,6 @@ function handleWebSocketEvent(data) {
       drawPitch();
       break;
       
-    case 'reasoning':
-      addAgentInsight('🧠 Reasoning', data.timestamp, data.text);
-      break;
-
-    case 'commentary':
-      addAgentInsight('🎙️ Commentary', data.timestamp, data.text);
-      break;
-
     case 'progress':
       setProgressBar(data.pct);
       break;

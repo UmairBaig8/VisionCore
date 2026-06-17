@@ -13,12 +13,6 @@ class EventEmitter:
     def on_key_event(self, event):
         pass
 
-    def on_reasoning(self, timestamp, text):
-        pass
-
-    def on_commentary(self, timestamp, text):
-        pass
-
     def on_clip_generated(self, event_type, timestamp, path, total_clips):
         pass
 

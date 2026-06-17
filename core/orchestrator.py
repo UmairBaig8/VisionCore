@@ -477,11 +477,6 @@ class VideoOrchestrator:
                     reasoning_str = r.get("reasoning")
                     commentary_str = r.get("commentary")
 
-                    if reasoning_str:
-                        self.emitter.on_reasoning(f"{timestamp:.1f}s", reasoning_str)
-                    if commentary_str:
-                        self.emitter.on_commentary(f"{timestamp:.1f}s", commentary_str)
-
             # ── immediate clip generation for live reel ──
             if live_reel and key_events:
                 for ev in key_events:
