@@ -587,7 +587,14 @@ function handleWebSocketEvent(data) {
     case 'score':
       setStat('score-val', `${data.home}-${data.away}`);
       break;
-      
+
+    case 'status':
+      if (data.phase) { currentPhase = data.phase; setStat('phase-val', currentPhase); }
+      if (data.score) setStat('score-val', data.score);
+      if (data.sport) setStat('sport-val', data.sport);
+      drawPitch();
+      break;
+
     case 'phase':
       currentPhase = data.phase || 'open_play';
       setStat('phase-val', currentPhase);
