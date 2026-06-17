@@ -276,6 +276,7 @@ function drawPitch() {
   const h = pitchCanvas.height / window.devicePixelRatio;
   
   if (w < 10 || h < 10) { setTimeout(drawPitch, 500); return; }
+  const h = pitchCanvas.height / window.devicePixelRatio;
   pitchCtx.clearRect(0, 0, w, h);
 
   // Render Green Background
