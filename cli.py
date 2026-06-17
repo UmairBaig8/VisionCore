@@ -84,6 +84,10 @@ def analyze(
         False, "--verbose", "-v",
         help="Show agent routing decisions per frame"
     ),
+    reel: bool = typer.Option(
+        False, "--reel",
+        help="Generate highlight reel from detected key events"
+    ),
 ):
     """Analyze a video"""
     from pathlib import Path
@@ -105,6 +109,7 @@ def analyze(
         classify=not no_classify,
         location=location,
         verbose=verbose,
+        generate_reel_flag=reel,
     )
     orchestrator.run()
 

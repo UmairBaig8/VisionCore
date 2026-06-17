@@ -1,0 +1,2 @@
+sport,video_type,teams,location,league,home_score,away_score,final_score,phase,key_events_count,key_events_list
+generic,graphic_overlay,,Unknown,Unknown,0,0,0-0,kickoff,0,[]

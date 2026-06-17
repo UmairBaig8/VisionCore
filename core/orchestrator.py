@@ -22,6 +22,7 @@ from skills.timeline import Timeline
 from skills.video_loader import open_video
 from skills.report_generator import save_report
 from skills.csv_writer import save_csv
+from skills.highlight_reel import generate_reel
 
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2
@@ -261,7 +262,7 @@ class VideoOrchestrator:
     def __init__(self, video_path, sample_interval=0.5,
                  depth="full", stream_mode=False, report_only=False,
                  live=False, classify=True, location=None,
-                 verbose=False):
+                 verbose=False, generate_reel_flag=False):
         self.video_path = video_path
         self.sample_interval = sample_interval
         self.depth = depth
@@ -271,6 +272,7 @@ class VideoOrchestrator:
         self.classify = classify
         self.location = location
         self.verbose = verbose
+        self.generate_reel = generate_reel_flag
         self.ctx = None
 
     def _run_parallel(self, client, tasks):
@@ -492,11 +494,23 @@ class VideoOrchestrator:
 
         report_path = save_report(header + final_summary, video_stem)
 
+        reel_path = None
+        if self.generate_reel and self.ctx.key_events:
+            print("\nGenerating highlight reel", end="", flush=True)
+            reel_path = generate_reel(self.video_path, self.ctx.key_events,
+                                      video_stem)
+            if reel_path:
+                print(f" → {reel_path}")
+            else:
+                print(" → failed (no clips extracted)")
+
         if not self.report_only:
             print(f"\nType:   {self.ctx.video_type}  |  Sport: {self.ctx.sport}")
             print(f"Score:  {self.ctx.score_string()}  |  Events: {len(self.ctx.key_events)}")
             print(f"CSV:    {csv_path}")
             print(f"Report: {report_path}")
+            if reel_path:
+                print(f"Reel:   {reel_path}")
         else:
             print(report_path)
 
