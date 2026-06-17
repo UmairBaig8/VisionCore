@@ -80,12 +80,13 @@ class WebSocketEmitter(EventEmitter):
 def _run_analysis(job_id, video_path, **kwargs):
     try:
         emitter = jobs[job_id].get("emitter")
+        # default to stream + live for API mode
+        kwargs.setdefault("stream_mode", True)
+        kwargs.setdefault("live", True)
         orchestrator = VideoOrchestrator(
             video_path=str(video_path),
             emitter=emitter,
             generate_reel_flag=True,
-            stream_mode=True,
-            live=True,
             **kwargs,
         )
         jobs[job_id]["orchestrator"] = orchestrator
@@ -162,8 +163,7 @@ async def upload_video(file: UploadFile):
 
 
 @app.post("/analyze")
-def start_analysis(video: str, depth: str = "fast", interval: float = 1.0,
-                   live: bool = True):
+def start_analysis(video: str, depth: str = "fast", interval: float = 1.0):
     video_path = Path(video)
     if not video_path.exists():
         return JSONResponse({"error": f"Video not found: {video}"}, status_code=404)
@@ -183,7 +183,7 @@ def start_analysis(video: str, depth: str = "fast", interval: float = 1.0,
     thread = threading.Thread(
         target=_run_analysis,
         args=(job_id, video_path),
-        kwargs={"depth": depth, "sample_interval": interval, "live": live},
+        kwargs={"depth": depth, "sample_interval": interval},
         daemon=True,
     )
     thread.start()
