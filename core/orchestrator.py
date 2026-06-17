@@ -102,31 +102,22 @@ def _detect_sport(client, video_path):
     if not sport_prompt_path.exists():
         return {"sport": "generic", "confidence": 0.0}
     sport_prompt = sport_prompt_path.read_text()
-    # sample from middle of video (skip intro graphics / pre-match)
     cap = open_video(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    # try 30s in, 50% in, 70% in — return majority vote
-    offsets = [int(fps * 30), total // 2, int(total * 0.7)]
-    votes = {}
-    for off in offsets:
-        off = min(off, total - 1)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, off)
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        b64 = encode_frame(frame)
-        if not b64:
-            continue
-        result = _ask_with_retry(client, sport_prompt, b64, label="sport")
-        if result:
-            parsed = _parse_json_safe(result)
-            s = parsed.get("sport", "generic")
-            votes[s] = votes.get(s, 0) + 1
+    off = min(total // 2, total - 1)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, off)
+    ret, frame = cap.read()
     cap.release()
-    if votes:
-        best = max(votes, key=votes.get)
-        return {"sport": best, "confidence": min(votes[best] / len(offsets), 1.0)}
+    if not ret:
+        return {"sport": "generic", "confidence": 0.0}
+    b64 = encode_frame(frame)
+    if not b64:
+        return {"sport": "generic", "confidence": 0.0}
+    result = _ask_with_retry(client, sport_prompt, b64, label="sport")
+    if result:
+        parsed = _parse_json_safe(result)
+        return {"sport": parsed.get("sport", "generic"), "confidence": 0.8}
     return {"sport": "generic", "confidence": 0.0}
 
 
@@ -158,45 +149,26 @@ def _classify_video(client, video_path, interval):
     cap = open_video(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    # skip first 10s (intro graphics), sample 3 frames from 10% 40% 70%
-    offsets = [max(int(fps * 10), 0), total // 3, int(total * 0.7)]
-    samples = []
-    for off in offsets:
-        off = min(off, total - 1)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, off)
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        b64 = encode_frame(frame)
-        if not b64:
-            continue
-        result = _ask_with_retry(client, classifier_prompt, b64, label="classify")
-        if result:
-            samples.append(_parse_json_safe(result))
+    # skip first 10s (intro graphics), sample middle frame
+    off = max(min(total // 2, total - 1), int(fps * 10))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, off)
+    ret, frame = cap.read()
     cap.release()
-
-    if not samples:
+    if not ret:
         return {"video_type": "full_match", "confidence": 0.0,
-                "evidence": "no frames classified"}
-
-    tally = {}
-    for s in samples:
-        t = s.get("video_type", "full_match")
-        tally[t] = tally.get(t, 0) + 1
-    best_type = max(tally, key=tally.get)
-    confidence = tally[best_type] / len(samples)
-
-    if confidence < 0.5 and len(tally) > 1:
-        del tally[best_type]
-        runner_up = max(tally, key=tally.get)
-        print(f"  ⚠ low confidence ({confidence:.0%}), falling back to {runner_up}", file=sys.stderr)
-        best_type = runner_up
-        confidence = tally[runner_up] / (len(samples) - tally.get(best_type, 0) or 1)
-
-    return {"video_type": best_type,
-            "confidence": confidence,
-            "evidence": samples[0].get("evidence", ""),
-            "tally": tally}
+                "evidence": "no frame extracted"}
+    b64 = encode_frame(frame)
+    if not b64:
+        return {"video_type": "full_match", "confidence": 0.0,
+                "evidence": "encode failed"}
+    result = _ask_with_retry(client, classifier_prompt, b64, label="classify")
+    if result:
+        parsed = _parse_json_safe(result)
+        return {"video_type": parsed.get("video_type", "full_match"),
+                "confidence": 0.8,
+                "evidence": parsed.get("evidence", "")}
+    return {"video_type": "full_match", "confidence": 0.0,
+            "evidence": "no response"}
 
 
 def _build_report_header(ctx, video_stem):
