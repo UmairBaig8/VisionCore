@@ -952,11 +952,11 @@
     .tactical-pitch-panel {
       display: flex;
       flex-direction: column;
-      align-items: center;
     }
 
     .pitch-container {
       width: 100%;
+      min-height: 200px;
       background: #0d1a10;
       border: 1px solid rgba(255, 255, 255, 0.05);
       border-radius: var(--radius-md);
@@ -969,6 +969,7 @@
       width: 100%;
       height: 100%;
       display: block;
+      background: #0d1a10;
     }
 
     /* ── EVENT TIMELINE BAR ── */
@@ -1807,15 +1808,21 @@ function updateMomentumChart(timeStr, homeVal) {
 // ── TACTICAL PITCH CANVAS DRAWING ────────────────────────────────────────
 function initPitch() {
   pitchCanvas = document.getElementById('pitch-canvas');
+  console.log('[pitch] init — canvas found:', !!pitchCanvas);
   if (!pitchCanvas) return;
   pitchCtx = pitchCanvas.getContext('2d');
+  console.log('[pitch] context:', !!pitchCtx);
 
   const container = pitchCanvas.parentElement;
+  console.log('[pitch] container:', !!container, container ? container.className : '');
   if (!container) return;
 
   // auto-redraw whenever the container resizes
   if (window._pitchObserver) window._pitchObserver.disconnect();
-  window._pitchObserver = new ResizeObserver(() => {
+  window._pitchObserver = new ResizeObserver((entries) => {
+    for (const e of entries) {
+      console.log('[pitch] ResizeObserver fired —', e.contentRect.width, 'x', e.contentRect.height);
+    }
     resizePitchCanvas();
     drawPitch();
   });
@@ -1823,24 +1830,33 @@ function initPitch() {
 
   // initial draw — small delay to let CSS aspect-ratio settle
   setTimeout(() => {
+    const r = container.getBoundingClientRect();
+    console.log('[pitch] initial draw — container rect:', r.width, 'x', r.height);
     resizePitchCanvas();
     drawPitch();
   }, 100);
 }
 
 function resizePitchCanvas() {
-  if (!pitchCanvas) return;
+  if (!pitchCanvas || !pitchCtx) { console.log('[pitch] resize skipped — canvas or ctx null'); return; }
   const rect = pitchCanvas.parentElement.getBoundingClientRect();
-  pitchCanvas.width = rect.width * window.devicePixelRatio;
-  pitchCanvas.height = rect.height * window.devicePixelRatio;
+  console.log('[pitch] resize — rect:', rect.width, 'x', rect.height, 'dpr:', window.devicePixelRatio);
+  const w = Math.round(rect.width * window.devicePixelRatio);
+  const h = Math.round(rect.height * window.devicePixelRatio);
+  if (w <= 0 || h <= 0) { console.log('[pitch] resize SKIPPED — zero dimensions'); return; }
+  pitchCanvas.width = w;
+  pitchCanvas.height = h;
   pitchCtx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
 }
 
 function drawPitch() {
-  if (!pitchCtx || !pitchCanvas) return;
+  if (!pitchCtx || !pitchCanvas) { console.log('[pitch] draw skipped — ctx/canvas null'); return; }
   
   const w = pitchCanvas.width / window.devicePixelRatio;
   const h = pitchCanvas.height / window.devicePixelRatio;
+  console.log('[pitch] draw — canvas dims:', w, 'x', h, 'sport:', currentSport, 'phase:', currentPhase);
+  if (w <= 0 || h <= 0) { console.log('[pitch] draw SKIPPED — zero canvas dims'); return; }
+
   pitchCtx.clearRect(0, 0, w, h);
 
   // Render Green Background
