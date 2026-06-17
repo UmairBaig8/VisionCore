@@ -486,7 +486,8 @@ function resetDashboardUI() {
       <div class="crop-pillar crop-pillar-right"><span class="crop-label-tag">Cut Pillar</span></div>
     </div>
   `;
-  document.getElementById('crop-overlay').style.display = isMobileCropActive ? 'grid' : 'none';
+  const overlay = document.getElementById('crop-overlay');
+  if (overlay) overlay.style.display = isMobileCropActive ? 'grid' : 'none';
 
   setStat('score-val', '0-0');
   setStat('phase-val', 'Running');
@@ -771,7 +772,8 @@ async function onProcessingComplete() {
       <div class="crop-pillar crop-pillar-right"><span class="crop-label-tag">Cut Pillar</span></div>
     </div>
   `;
-  document.getElementById('crop-overlay').style.display = isMobileCropActive ? 'grid' : 'none';
+  const overlay = document.getElementById('crop-overlay');
+  if (overlay) overlay.style.display = isMobileCropActive ? 'grid' : 'none';
 
   // Load Context
   try {
