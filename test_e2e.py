@@ -3,10 +3,8 @@
 End-to-end test — runs full pipeline on a real video with live vLLM.
 
 Usage:
-    python test_e2e.py                          # auto-pick video, quick mode
+    python test_e2e.py                          # auto-pick video, stream + live sync
     python test_e2e.py videos/11.mp4            # specific video
-    python test_e2e.py videos/11.mp4 --full     # full analysis (slow, thorough)
-    python test_e2e.py videos/11.mp4 --quick    # stream mode, 2s interval
 """
 
 import json
@@ -35,31 +33,23 @@ def find_video(path=None):
     return mp4s[0]
 
 
-def test_e2e(video_path, mode="quick"):
+def test_e2e(video_path):
     video_stem = video_path.stem
 
-    if mode == "quick":
-        depth = "scene-only"
-        interval = 2.0
-        live = True
-        stream = True
-        reel = True
-        label = "quick (stream, scene-only, 2s interval)"
-    else:
-        depth = "fast"
-        interval = 0.5
-        live = False
-        stream = False
-        reel = True
-        label = "full (batch, fast depth, 0.5s interval)"
+    # stream mode with live sync — matches video playback speed
+    depth = "fast"
+    interval = 1.0
+    live = True
+    stream = True
+    reel = True
 
     print(f"\n{'='*60}")
-    print(f"E2E Test: {video_path.name}  [{label}]")
+    print(f"E2E: {video_path.name}  [stream + live sync, {depth}, {interval}s interval]")
     print(f"{'='*60}\n")
 
     t0 = time.time()
 
-    print("1. Running analysis...")
+    print("1. Starting stream analysis...")
     orch = VideoOrchestrator(
         video_path=str(video_path),
         sample_interval=interval,
@@ -172,8 +162,6 @@ def test_e2e(video_path, mode="quick"):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    mode = "full" if "--full" in sys.argv else "quick"
-    video = args[0] if args else None
-    ok = test_e2e(find_video(video), mode)
+    video = sys.argv[1] if len(sys.argv) > 1 else None
+    ok = test_e2e(find_video(video))
     sys.exit(0 if ok else 1)
