@@ -1,5 +1,10 @@
 // VidCore Premium Dashboard Logic — WebSocket integration, Chart.js momentum, Canvas field visualizer
-const API = '';
+// Auto-detect base path for proxy (AMD Jupyter) or direct access
+const API = (() => {
+  const p = window.location.pathname;
+  const idx = p.lastIndexOf('/dashboard');
+  return idx >= 0 ? p.substring(0, idx + 1) : '/';
+})();
 let ws = null;
 let jobId = null;
 let selectedVideo = null;
@@ -412,7 +417,7 @@ async function startAnalysis() {
 
   // Initialize Socket connection
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${location.host}/ws/${jobId}`);
+  ws = new WebSocket(`${proto}//${location.host}${API}ws/${jobId}`);
   ws.onmessage = e => handleWebSocketEvent(JSON.parse(e.data));
   
   ws.onclose = () => {
@@ -728,7 +733,7 @@ async function onProcessingComplete() {
   const cleanName = selectedVideoName.replace('.mp4','');
   playerWindow.innerHTML = `
     <video class="video-element" id="live-player" controls autoplay muted>
-      <source src="/output/reels/live/${cleanName}_reel.mp4?t=${Date.now()}" type="video/mp4">
+      <source src="${API}output/reels/live/${cleanName}_reel.mp4?t=${Date.now()}" type="video/mp4">
       <source src="${selectedVideo}" type="video/mp4">
     </video>
     <div class="crop-overlay-916" id="crop-overlay">
@@ -826,7 +831,7 @@ function loadStudioReel(flavor, btnElement) {
   document.getElementById('studio-playback-status').textContent = 'Active compilation flavor: ' + flavor.toUpperCase();
 
   // Map flavors to dynamic backend static paths
-  let reelSource = `/output/reels/${cleanName}_${flavor}.mp4?t=${Date.now()}`;
+  let reelSource = `${API}output/reels/${cleanName}_${flavor}.mp4?t=${Date.now()}`;
   if (flavor === 'all' && studioReelsManifest && studioReelsManifest.reel_url) {
     reelSource = studioReelsManifest.reel_url + `?t=${Date.now()}`;
   }
@@ -861,7 +866,7 @@ function downloadActiveReel() {
   if (!selectedVideo) return;
   const cleanName = selectedVideoName.replace('.mp4','');
   
-  let downloadUrl = `/output/reels/${cleanName}_${activeStudioFlavor}.mp4`;
+  let downloadUrl = `${API}output/reels/${cleanName}_${activeStudioFlavor}.mp4`;
   if (activeStudioFlavor === 'all' && studioReelsManifest && studioReelsManifest.reel_url) {
     downloadUrl = studioReelsManifest.reel_url;
   }
