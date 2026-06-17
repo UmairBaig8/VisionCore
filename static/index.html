@@ -1,177 +1,199 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VidCore — Live Analysis</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VidCore — AI Video Analysis</title>
 <style>
-:root{
-  --bg:#08111d; --card:#101b2c; --border:#1f2a3a; --text:#e2e8f0; --muted:#64748b;
-  --blue:#3b82f6; --green:#22c55e; --red:#ef4444; --yellow:#facc15; --purple:#8b5cf6; --orange:#f97316;
-}
+:root{--bg:#080e18;--card:#0f1926;--border:#1a2740;--text:#e2e8f0;--muted:#5c6f87;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--yellow:#f59e0b;--purple:#8b5cf6;--orange:#f97316;--radius:12px}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(180deg,#06101f,#091828);color:var(--text);height:100vh;overflow:hidden}
-.app{display:grid;grid-template-columns:260px 1fr;height:100vh}
-.sidebar{padding:20px;border-right:1px solid var(--border);background:#09121f;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
-.logo{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:700;color:var(--blue)}
-.logo .badge{background:var(--orange);color:#000;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700}
-.muted{font-size:12px;color:var(--muted)}
-a{color:var(--blue);text-decoration:none;font-size:12px}
-select{width:100%;padding:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px}
-input[type=file]{display:none}
-.upload-zone{border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;cursor:pointer;font-size:12px;color:var(--muted);transition:border .15s}
-.upload-zone:hover{border-color:var(--blue)}
-.btn{width:100%;padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
-.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}.btn-primary:disabled{opacity:.5;cursor:not-allowed}
-.btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#b91c1c}
-.spacer{flex:1}
-/* MAIN */
-.main{padding:20px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
-.header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
-.header h1{font-size:22px;font-weight:800}
-.header .sub{font-size:12px;color:var(--muted);margin-top:2px}
-.stats{display:flex;gap:10px;flex-wrap:wrap}
-.stat{background:var(--card);padding:12px 16px;border-radius:14px;border:1px solid var(--border);text-align:center;min-width:70px}
-.stat span{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.stat strong{font-size:20px;font-weight:700;margin-top:2px;display:block}
-.stat .s{color:var(--orange)}.stat .g{color:var(--green)}
-.content{display:grid;grid-template-columns:1fr 340px;gap:16px;flex:1;min-height:0}
-.panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;overflow-y:auto}
-.panel h3{font-size:13px;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px}
-/* REEL */
-.reel-preview{aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
-.reel-preview video{width:100%;height:100%;object-fit:contain}
-.clips-row{display:flex;gap:6px;overflow-x:auto;padding:4px 0;margin-top:6px}
-.clip{min-width:90px;height:50px;background:var(--card);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;border:2px solid transparent;flex-shrink:0;position:relative}
-.clip:hover{border-color:var(--blue)}
-.clip .ct{position:absolute;bottom:2px;left:2px;font-size:8px;padding:1px 4px;border-radius:3px;background:#000a;color:#fff}
-/* TIMELINE */
-.timeline-bar{height:8px;background:#1e293b;border-radius:999px;position:relative;margin:8px 0}
-.timeline-bar .marker{position:absolute;top:-4px;width:16px;height:16px;border-radius:50%;cursor:pointer}
-.timeline-bar .goal{background:var(--green)}.timeline-bar .foul{background:var(--red)}
-.timeline-bar .card-y{background:var(--yellow)}.timeline-bar .var{background:var(--purple)}
-/* FILTERS */
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+/* ── TOP BAR ── */
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.topbar .logo{font-size:18px;font-weight:800;color:var(--blue)}
+.topbar .health{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.topbar .dot{width:8px;height:8px;border-radius:50%}
+.topbar .dot.on{background:var(--green)}.topbar .dot.off{background:var(--red)}
+.topbar .dot.loading{background:var(--yellow);animation:pulse 1s infinite}
+.topbar a{color:var(--blue);text-decoration:none;font-size:12px}
+@keyframes pulse{50%{opacity:.4}}
+/* ── LAYOUT ── */
+.layout{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 52px)}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+.sidebar{background:var(--card);border-right:1px solid var(--border);padding:16px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:calc(100vh - 52px)}
+.main{padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 52px)}
+/* ── COMPONENTS ── */
+input,select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;font-size:13px;width:100%}
+.btn{padding:10px 18px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{filter:brightness(1.1)}.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{filter:brightness(1.1)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{background:var(--border)}
+.btn-sm{padding:6px 12px;font-size:11px}
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:18px;text-align:center;cursor:pointer;font-size:12px;color:var(--muted);transition:.15s}.upload-zone:hover{border-color:var(--blue)}
+/* Cards & Panels */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+/* Stats row */
+.stats-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:2px}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;text-align:center;min-width:80px;flex:1}
+.stat-box .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.stat-box .value{font-size:22px;font-weight:800;margin-top:3px}
+.stat-box .value.score{color:var(--orange)}.stat-box .value.events{color:var(--green)}.stat-box .value.phase{font-size:14px;color:var(--purple)}
+/* Two-col */
+.two-col{display:grid;grid-template-columns:1fr 360px;gap:14px;flex:1;min-height:0}
+@media(max-width:900px){.two-col{grid-template-columns:1fr}}
+/* Video */
+.video-wrap{aspect-ratio:16/9;background:#000;border-radius:var(--radius);overflow:hidden}
+.video-wrap video,.video-wrap .placeholder{width:100%;height:100%;object-fit:contain}
+.video-wrap .placeholder{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);font-size:13px}
+/* Clips */
+.clips-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-top:8px}
+.clip-thumb{min-width:80px;height:45px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;cursor:pointer;border:2px solid transparent;flex-shrink:0;position:relative;color:var(--muted)}
+.clip-thumb:hover{border-color:var(--blue)}
+.clip-thumb .tag{position:absolute;bottom:1px;left:1px;font-size:7px;padding:0 3px;border-radius:2px;background:#000a;color:#fff}
+/* Timeline */
+.timeline{height:6px;background:var(--border);border-radius:999px;position:relative;margin:6px 0}
+.timeline .dot{position:absolute;top:-5px;width:16px;height:16px;border-radius:50%;cursor:pointer;transition:.15s}.timeline .dot:hover{transform:scale(1.3)}
+.t-g{background:var(--green)}.t-r{background:var(--red)}.t-y{background:var(--yellow)}.t-p{background:var(--purple)}.t-b{background:var(--blue)}
+/* Filters */
 .filters{display:flex;gap:6px;flex-wrap:wrap}
-.chip{padding:5px 10px;background:#172335;border-radius:999px;font-size:11px;cursor:pointer;transition:all .15s;border:1px solid transparent}
-.chip:hover{border-color:var(--blue)}.chip.active{background:var(--blue);border-color:var(--blue)}
-/* EVENTS */
-.event{border-left:3px solid var(--border);padding:10px 12px;margin-bottom:6px;background:#0f1a2a;border-radius:0 8px 8px 0;animation:slide .3s ease}
-.event.goal{border-color:var(--green)}.event.foul{border-color:var(--red)}
-.event.card-y{border-color:var(--yellow)}.event.var{border-color:var(--purple)}
-.event .ts{color:var(--blue);font-weight:600;font-size:12px}
-.event .et{font-weight:700;font-size:12px;margin:2px 0}
-.event .desc{font-size:11px;color:var(--muted)}
-@keyframes slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
-/* BOTTOM */
-.bottom{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.card{background:var(--card);padding:16px;border-radius:14px;border:1px solid var(--border)}
-.card h4{font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
-.card ul{list-style:none;font-size:12px;line-height:1.8}
-.card ul li:before{content:"• ";color:var(--blue)}
-/* PROGRESS */
+.filter-chip{padding:5px 10px;background:var(--bg);border-radius:999px;font-size:11px;cursor:pointer;border:1px solid transparent}.filter-chip:hover{border-color:var(--blue)}.filter-chip.active{background:var(--blue);color:#fff}
+/* Events */
+.event{border-left:3px solid var(--border);padding:8px 10px;margin-bottom:5px;background:var(--bg);border-radius:0 6px 6px 0;animation:slideIn .25s ease;font-size:12px}
+.event.goal{border-color:var(--green)}.event.foul{border-color:var(--red)}.event.card{border-color:var(--yellow)}.event.var{border-color:var(--purple)}
+.event .e-time{color:var(--blue);font-weight:600;font-size:11px}
+.event .e-type{font-weight:700;margin:2px 0}
+.event .e-desc{color:var(--muted);font-size:11px}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+/* Bottom grid */
+.report-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
+@media(max-width:900px){.report-grid{grid-template-columns:1fr}}
+/* Video list */
+.vid-item{padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;transition:.1s;display:flex;align-items:center;gap:6px;overflow:hidden}
+.vid-item:hover{background:var(--border)}.vid-item.active{background:#1e3a5f;border:1px solid var(--blue)}
+.vid-item .name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vid-item .size{font-size:10px;color:var(--muted)}
+/* States */
+.empty-state{text-align:center;padding:30px 16px;color:var(--muted);font-size:13px}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Progress */
 .progress-wrap{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
-.progress-bar{flex:1;height:4px;background:#1e293b;border-radius:999px;overflow:hidden}
+.progress-bar{flex:1;height:4px;background:var(--border);border-radius:999px;overflow:hidden}
 .progress-fill{height:100%;background:var(--blue);transition:width .3s}
-/* VIDEO LIST */
-.video-item{padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .1s}
-.video-item:hover{background:#1e293b}.video-item.active{background:#1e3a5f;border:1px solid var(--blue)}
+/* Tooltip */
+[title]{position:relative}
 </style>
 </head>
 <body>
 
-<div class="app">
-<!-- ═══ SIDEBAR ═══ -->
-<aside class="sidebar">
-  <div class="logo"><span>◉</span><span>VidCore</span></div>
-  <a href="/demo">Try Demo (no vLLM needed)</a>
+<!-- ═══ TOP BAR ═══ -->
+<header class="topbar">
+  <span class="logo">◉ VidCore</span>
+  <div class="health">
+    <span class="dot loading" id="health-dot"></span>
+    <span id="health-text">Checking...</span>
+    <a href="/demo" style="margin-left:12px">Demo</a>
+    <a href="/docs" target="_blank">API Docs</a>
+  </div>
+</header>
 
+<!-- ═══ LAYOUT ═══ -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
   <div class="upload-zone" onclick="document.getElementById('upload-input').click()">
     📤 Drop video or click to upload
-    <input type="file" id="upload-input" accept="video/*" onchange="uploadVideo()">
+    <input type="file" id="upload-input" accept="video/*" style="display:none" onchange="uploadVideo()">
   </div>
 
   <div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Available Videos</div>
-    <div id="video-list"><div style="color:var(--muted);font-size:12px">Loading...</div></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">VIDEO LIBRARY</div>
+    <div id="video-list"><div class="empty-state">Loading...</div></div>
   </div>
 
   <select id="depth-select">
     <option value="fast">Fast (scene + events)</option>
-    <option value="scene-only">Scene only</option>
-    <option value="full">Full analysis</option>
+    <option value="scene-only">Scene only (fastest)</option>
+    <option value="full">Full (scene + event + analysis)</option>
   </select>
 
   <button class="btn btn-primary" onclick="startAnalysis()" id="analyze-btn">▶ Start Analysis</button>
-  <button class="btn btn-danger" onclick="stopAnalysis()">✕ Stop</button>
+  <button class="btn btn-danger btn-sm" onclick="stopAnalysis()" id="stop-btn" style="display:none">✕ Stop</button>
 
-  <div class="spacer"></div>
-
-  <div class="progress-wrap">
+  <div class="progress-wrap" id="progress-area" style="display:none">
     <span id="progress-label">0%</span>
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
   </div>
+
+  <div style="font-size:11px;color:var(--muted);margin-top:8px">REEL FLAVORS</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('all')">All Highlights</button>
+    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('goals')">Goals Only</button>
+    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('drama')">Drama</button>
+    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('social_goals')">Social 9:16</button>
+  </div>
+
+  <div style="font-size:11px;color:var(--muted);margin-top:8px">EXPORT</div>
+  <button class="btn btn-outline btn-sm" onclick="downloadCSV()">📥 Download CSV</button>
+  <button class="btn btn-outline btn-sm" onclick="downloadReport()">📄 Download Report</button>
 </aside>
 
-<!-- ═══ MAIN ═══ -->
-<main class="main">
-  <div class="header">
-    <div>
-      <h1 id="match-title">Select a video to begin</h1>
-      <div class="sub" id="match-sub">Upload or select from library</div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span>Score</span><strong class="s" id="score-val">0-0</strong></div>
-      <div class="stat"><span>Events</span><strong class="g" id="events-val">0</strong></div>
-      <div class="stat"><span>Sport</span><strong id="sport-val" style="font-size:13px">--</strong></div>
-      <div class="stat"><span>Phase</span><strong id="phase-val" style="font-size:13px">--</strong></div>
-    </div>
+<!-- MAIN -->
+<main class="main" id="main-content">
+
+  <!-- Stats Row -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-box"><div class="label">Score</div><div class="value score" id="score-val">0-0</div></div>
+    <div class="stat-box"><div class="label">Events</div><div class="value events" id="events-val">0</div></div>
+    <div class="stat-box"><div class="label">Sport</div><div class="value" id="sport-val" style="font-size:14px">--</div></div>
+    <div class="stat-box"><div class="label">Phase</div><div class="value phase" id="phase-val">idle</div></div>
+    <div class="stat-box"><div class="label">Type</div><div class="value" id="type-val" style="font-size:13px">--</div></div>
+    <div class="stat-box"><div class="label">Location</div><div class="value" id="location-val" style="font-size:12px">--</div></div>
   </div>
 
-  <div class="content">
-    <div class="panel">
-      <h3>🎬 Highlight Reel</h3>
-      <div class="reel-preview" id="reel-preview">
-        <video id="reel-player" controls autoplay muted loop></video>
+  <!-- Two Column -->
+  <div class="two-col">
+    <!-- Left -->
+    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <h3>🎬 Reel Player</h3>
+      <div class="video-wrap" id="reel-wrap">
+        <div class="placeholder">▶ Start analysis to see reels</div>
       </div>
       <div class="clips-row" id="clips-row"></div>
-
-      <div style="margin-top:12px"><h3>📊 Event Timeline</h3></div>
-      <div class="timeline-bar" id="timeline-bar"></div>
-
-      <div class="filters" style="margin-top:8px">
-        <span class="chip active" data-filter="all" onclick="setFilter('all',this)">All</span>
-        <span class="chip" data-filter="GOAL" onclick="setFilter('GOAL',this)">⚽ Goals</span>
-        <span class="chip" data-filter="FOUL" onclick="setFilter('FOUL',this)">🟥 Fouls</span>
-        <span class="chip" data-filter="CARD" onclick="setFilter('CARD',this)">🟨 Cards</span>
+      <h3 style="margin-top:8px">📊 Event Timeline</h3>
+      <div class="timeline" id="timeline-bar"></div>
+      <div class="filters">
+        <span class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">All</span>
+        <span class="filter-chip" data-filter="GOAL" onclick="setFilter('GOAL',this)">Goals</span>
+        <span class="filter-chip" data-filter="CARD" onclick="setFilter('CARD',this)">Cards</span>
+        <span class="filter-chip" data-filter="FOUL" onclick="setFilter('FOUL',this)">Fouls</span>
       </div>
     </div>
 
-    <div class="panel" id="ticker-panel">
+    <!-- Right: Ticker -->
+    <div class="card" style="overflow-y:auto;max-height:calc(100vh - 280px)">
       <h3>📡 Live Event Ticker</h3>
-      <div id="events"><div style="color:var(--muted);font-size:12px">Start analysis to see events</div></div>
+      <div id="events"><div class="empty-state">Start analysis to see live events</div></div>
     </div>
   </div>
 
-  <div class="bottom">
-    <div class="card">
-      <h4>📋 Match Report</h4>
-      <div id="report-panel" style="font-size:12px;line-height:1.6;max-height:200px;overflow-y:auto">
-        <span style="color:var(--muted)">Report appears after analysis completes</span>
-      </div>
+  <!-- Bottom: Report Grid -->
+  <div class="report-grid">
+    <div class="card" style="max-height:250px;overflow-y:auto">
+      <h3>📋 Match Report</h3>
+      <div id="report-content"><div class="empty-state">Report generated after analysis</div></div>
     </div>
     <div class="card">
-      <h4>📈 Live Stats</h4>
-      <ul id="stats-list">
-        <li style="color:var(--muted)">Waiting for data...</li>
-      </ul>
+      <h3>📈 Match Stats</h3>
+      <div id="stats-content"><div class="empty-state">--</div></div>
     </div>
     <div class="card">
-      <h4>📍 Match Info</h4>
-      <ul id="info-list">
-        <li style="color:var(--muted)">Start analysis to populate</li>
-      </ul>
+      <h3>📍 Match Info</h3>
+      <div id="info-content"><div class="empty-state">--</div></div>
     </div>
   </div>
+
 </main>
 </div>
 
