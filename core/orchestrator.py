@@ -12,6 +12,7 @@ from core.agent_loader import AgentLoader
 from core.agent_router import AgentRouter
 from core.config import load_config
 from core.context import MatchContext
+from core.emitter import EventEmitter
 from core.llm_client import VLLMClient
 from core.paths import agents_dir
 
@@ -274,7 +275,8 @@ class VideoOrchestrator:
                  live=False, classify=True, location=None,
                  verbose=False, generate_reel_flag=False,
                  clip_before=8.0, clip_after=5.0,
-                 player_filter=None, team_filter=None):
+                 player_filter=None, team_filter=None,
+                 emitter=None):
         self.video_path = video_path
         self.sample_interval = sample_interval
         self.depth = depth
@@ -289,6 +291,7 @@ class VideoOrchestrator:
         self.clip_after = clip_after
         self.player_filter = player_filter
         self.team_filter = team_filter
+        self.emitter = emitter or EventEmitter()
         self.ctx = None
 
     def _run_parallel(self, client, tasks):
@@ -397,7 +400,13 @@ class VideoOrchestrator:
                 continue
 
             # extract score + phase from scene description (heuristic fallback)
+            old_score = self.ctx.score_string()
+            old_phase = self.ctx.phase
             _update_context_from_scene(self.ctx, scene_desc)
+            if self.ctx.score_string() != old_score:
+                self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
+            if self.ctx.phase != old_phase and not self.ctx.phase_changed:
+                pass  # phase_changed is set in context.update_phase
 
             # step 2: router decides what else to call
             route = router.route(scene_desc, processed)
@@ -469,6 +478,16 @@ class VideoOrchestrator:
 
             timeline.add(event_dict)
 
+            # ── emitter events ──
+            stype = event_dict["scene_type"]
+            self.emitter.on_scene(f"{timestamp:.1f}s", stype,
+                                  _parse_json_safe(scene_desc).get("activity", ""),
+                                  scene_desc)
+
+            if key_events:
+                for ev in key_events:
+                    self.emitter.on_key_event(ev)
+
             if self.stream_mode:
                 prefix = ""
                 if key_events:
@@ -494,6 +513,9 @@ class VideoOrchestrator:
                 print(f"\r  {bar} {pct:.0f}% ({processed}/{total_frames}) "
                       f"{self.ctx.phase} {self.ctx.score_string()}{events_str}",
                       end="", flush=True)
+
+            self.emitter.on_progress(processed, total_frames,
+                                     int(processed / max(total_frames, 1) * 100))
 
         if not self.stream_mode and not self.report_only:
             print()
@@ -528,6 +550,9 @@ class VideoOrchestrator:
             header += f"\n## Highlights\n\n{highlights}\n\n---\n\n"
 
         report_path = save_report(header + final_summary, video_stem)
+
+        self.emitter.on_complete(str(report_path), str(csv_path),
+                                 reel_paths, len(self.ctx.key_events))
 
         reel_paths = {}
         if self.generate_reel:
