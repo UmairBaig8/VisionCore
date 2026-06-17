@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VidCore Demo — Mock Mode</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#c9d1d9;display:flex;height:100vh;overflow:hidden}
+#sidebar{width:260px;background:#161b22;border-right:1px solid #21262d;padding:16px;overflow-y:auto;flex-shrink:0}
+#main{flex:1;display:flex;flex-direction:column;overflow-y:auto}
+h1{font-size:18px;color:#58a6ff;margin-bottom:16px}
+h2{font-size:14px;color:#8b949e;margin:16px 0 8px}
+.btn{padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;transition:all .15s;width:100%;margin-bottom:6px}
+.btn-primary{background:#238636;color:#fff}.btn-primary:hover{background:#2ea043}
+.btn-danger{background:#da3633;color:#fff}.btn-danger:hover{background:#f85149}
+.btn-secondary{background:#21262d;color:#c9d1d9;border:1px solid #30363d}.btn-secondary:hover{background:#30363d}
+select{width:100%;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:13px;margin-bottom:8px}
+.video-item{padding:8px;border-radius:6px;cursor:pointer;font-size:12px;margin-bottom:2px}.video-item:hover{background:#21262d}.video-item.active{background:#1f6feb33;border:1px solid #1f6feb}
+#scoreboard{display:flex;gap:12px;padding:16px;background:#161b22;border-bottom:1px solid #21262d;flex-wrap:wrap;align-items:center}
+.metric{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 16px;text-align:center;min-width:80px}
+.metric .label{font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px}
+.metric .value{font-size:18px;font-weight:700;color:#58a6ff;margin-top:2px}
+.metric .value.score{font-size:24px;color:#f0883e}
+.metric .value.events{color:#3fb950}
+.metric .value.phase{color:#d2a8ff;font-size:13px}
+#panels{display:flex;flex:1;gap:12px;padding:12px;overflow:hidden}
+#player-panel{flex:1;min-width:0;display:flex;flex-direction:column}
+#ticker-panel{width:380px;flex-shrink:0;background:#161b22;border:1px solid #21262d;border-radius:8px;padding:12px;overflow-y:auto;max-height:calc(100vh - 180px)}
+.reel-placeholder{flex:1;background:#000;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#8b949e;font-size:14px}
+#events{display:flex;flex-direction:column;gap:6px}
+.event{border-left:3px solid #30363d;padding:8px 12px;font-size:12px;background:#0d1117;border-radius:0 6px 6px 0;animation:slideIn .3s ease}
+.event.goal{border-color:#3fb950}.event.card{border-color:#f0883e}.event.foul{border-color:#da3633}.event.var{border-color:#d2a8ff}
+.event .ts{color:#58a6ff;font-weight:600;margin-right:8px}
+.event .type{font-weight:700}
+@keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+#status-bar{padding:10px 16px;background:#161b22;border-top:1px solid #21262d;font-size:12px;color:#8b949e;display:flex;justify-content:space-between;align-items:center}
+.progress-bar{width:200px;height:6px;background:#21262d;border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:#238636;transition:width .3s}
+#report-panel{display:none;padding:16px;background:#161b22;border:1px solid #21262d;border-radius:8px;margin:12px;font-size:13px;line-height:1.6;max-height:300px;overflow-y:auto}
+#report-panel h2,#report-panel h3{color:#58a6ff;margin:8px 0}
+.reel-preview{position:relative;cursor:pointer;border:2px solid transparent;border-radius:6px;overflow:hidden;margin:4px 0;transition:border .2s}
+.reel-preview:hover,.reel-preview.active{border-color:#58a6ff}
+.reel-preview img{width:100%;display:block}
+.reel-preview .badge{position:absolute;top:4px;left:4px;background:#238636cc;color:#fff;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700}
+#reel-clips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.clip-thumb{width:80px;height:45px;background:#21262d;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;position:relative;overflow:hidden}
+.clip-thumb.active{border:2px solid #58a6ff}
+.clip-thumb .clip-type{position:absolute;bottom:2px;left:2px;font-size:8px;padding:1px 4px;border-radius:2px;background:#0008;color:#fff}
+.demo-badge{background:#f0883e;color:#000;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>⚽ VidCore <span class="demo-badge">DEMO</span></h1>
+  <div style="font-size:12px;color:#8b949e;margin-bottom:12px">Mock data — no vLLM needed</div>
+
+  <select id="demo-select">
+    <option value="football">Football — Roma vs Verona (2-1)</option>
+    <option value="football2">Football — PSV vs Dortmund (2-2)</option>
+    <option value="cricket">Cricket — T20 Highlights</option>
+  </select>
+
+  <button class="btn btn-primary" onclick="runDemo()">▶ Run Demo</button>
+  <button class="btn btn-danger" onclick="stopDemo()">✕ Stop</button>
+
+  <button class="btn btn-secondary" style="margin-top:24px" onclick="useLive()">
+    🔗 Switch to Live API
+  </button>
+</div>
+
+<div id="main">
+  <div id="scoreboard">
+    <div class="metric"><div class="label">Sport</div><div class="value" id="sport-val">--</div></div>
+    <div class="metric"><div class="label">Score</div><div class="value score" id="score-val">0-0</div></div>
+    <div class="metric"><div class="label">Phase</div><div class="value phase" id="phase-val">--</div></div>
+    <div class="metric"><div class="label">Events</div><div class="value events" id="events-val">0</div></div>
+    <div class="metric"><div class="label">Stadium</div><div class="value" id="location-val" style="font-size:11px">--</div></div>
+    <div class="metric"><div class="label">League</div><div class="value" id="league-val" style="font-size:12px">--</div></div>
+  </div>
+
+  <div id="panels">
+    <div id="player-panel">
+      <div class="reel-placeholder" id="reel-area">
+        <div>▶ Reel preview appears here during analysis</div>
+      </div>
+      <div id="reel-clips"></div>
+    </div>
+    <div id="ticker-panel">
+      <div style="font-weight:600;margin-bottom:8px">📡 Live Event Ticker</div>
+      <div id="events"><div style="color:#8b949e;font-size:12px">Press "Run Demo" to start</div></div>
+    </div>
+  </div>
+
+  <div id="report-panel"></div>
+
+  <div id="status-bar">
+    <span id="status-text">● Ready</span>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<script>
+// ── Mock Data ──────────────────────────────────────────────────────────
+const DEMOS = {
+  football: {
+    sport: 'football', location: 'San Siro, Milan', league: 'Serie A',
+    teams: 'Roma vs Verona',
+    events: [
+      {t:5, type:'GOAL_ATTEMPT', team:'Roma', desc:'Dybala shot from edge of box, saved by goalkeeper'},
+      {t:18, type:'FOUL', team:'Verona', desc:'Harsh tackle on Pellegrini near midfield'},
+      {t:23, type:'GOAL', team:'Roma', desc:'Lukaku header from corner kick — 1-0!'},
+      {t:31, type:'YELLOW_CARD', team:'Verona', desc:'Folorunsho booked for late challenge'},
+      {t:38, type:'GOAL_ATTEMPT', team:'Verona', desc:'Suslov free kick hits the crossbar'},
+      {t:45, type:'PENALTY', team:'Roma', desc:'Handball in the box! VAR checking...'},
+      {t:47, type:'GOAL', team:'Roma', desc:'Dybala converts penalty — 2-0!'},
+      {t:55, type:'SUBSTITUTION', team:'Roma', desc:'El Shaarawy replaces Pellegrini'},
+      {t:62, type:'VAR_CHECK', team:'Verona', desc:'VAR reviews possible offside on Verona attack'},
+      {t:68, type:'GOAL_ATTEMPT', team:'Roma', desc:'Zalewski cut inside, shot deflected for corner'},
+      {t:75, type:'GOAL', team:'Verona', desc:'Djurić taps in from close range — 2-1!'},
+      {t:82, type:'FOUL', team:'Verona', desc:'Desperate tackle to stop counter-attack'},
+      {t:89, type:'GOAL_ATTEMPT', team:'Verona', desc:'Last-minute header goes over the bar'},
+      {t:90, type:'FULL_TIME', team:'', desc:'Final whistle! Roma wins 2-1'},
+    ],
+    scoreChanges: [
+      {t:23, home:1, away:0}, {t:47, home:2, away:0}, {t:75, home:2, away:1},
+    ],
+  },
+  football2: {
+    sport: 'football', location: 'Philips Stadion, Eindhoven', league: 'UEFA Champions League',
+    teams: 'PSV vs Dortmund',
+    events: [
+      {t:8, type:'GOAL_ATTEMPT', team:'PSV', desc:'De Jong shot saved by Kobel'},
+      {t:14, type:'GOAL', team:'Dortmund', desc:'Malen scores against former club — 0-1!'},
+      {t:22, type:'FOUL', team:'Dortmund', desc:'Can fouls Veerman in dangerous area'},
+      {t:28, type:'GOAL_ATTEMPT', team:'PSV', desc:'Tillman free kick just wide'},
+      {t:36, type:'YELLOW_CARD', team:'PSV', desc:'Schouten booked for tactical foul'},
+      {t:42, type:'GOAL_ATTEMPT', team:'Dortmund', desc:'Füllkrug header saved brilliantly'},
+      {t:52, type:'GOAL', team:'PSV', desc:'De Jong equalizes from Lozano cross — 1-1!'},
+      {t:61, type:'SUBSTITUTION', team:'PSV', desc:'Lozano off, Bakayoko on'},
+      {t:70, type:'VAR_CHECK', team:'PSV', desc:'Penalty check for handball — denied'},
+      {t:78, type:'GOAL', team:'PSV', desc:'Tillman screamer from 25 yards — 2-1! 🔊'},
+      {t:85, type:'FOUL', team:'Dortmund', desc:'Hummels foul, yellow card incoming'},
+      {t:88, type:'GOAL', team:'Dortmund', desc:'Reus equalizes in stoppage time — 2-2!'},
+      {t:90, type:'FULL_TIME', team:'', desc:'Thrilling 2-2 draw!'},
+    ],
+    scoreChanges: [
+      {t:14, home:0, away:1}, {t:52, home:1, away:1}, {t:78, home:2, away:1}, {t:88, home:2, away:2},
+    ],
+  },
+  cricket: {
+    sport: 'cricket', location: 'Wankhede Stadium, Mumbai', league: 'IPL 2024',
+    teams: 'MI vs CSK',
+    events: [
+      {t:3, type:'FOUR', team:'MI', desc:'Rohit Sharma drives through covers — 4 runs'},
+      {t:7, type:'SIX', team:'MI', desc:'Ishan Kishan pulls over midwicket — maximum!'},
+      {t:12, type:'WICKET', team:'CSK', desc:'Chahar cleans up Rohit — bowled!'},
+      {t:18, type:'FOUR', team:'MI', desc:'Tilak Varma cuts past point for four'},
+      {t:24, type:'SIX', team:'MI', desc:'Sky launches one into the crowd — 6!'},
+      {t:31, type:'WICKET', team:'CSK', desc:'Jadeja gets Kishan stumped!'},
+      {t:38, type:'FOUR', team:'MI', desc:'Hardik Pandya slams through long-on'},
+      {t:42, type:'DRS_REVIEW', team:'CSK', desc:'CSK reviews LBW decision — umpire\'s call'},
+      {t:45, type:'WICKET', team:'CSK', desc:'Pathirana yorker — timber!'},
+      {t:50, type:'CENTURY', team:'MI', desc:'Sky brings up 100 off 45 balls! 🎉'},
+    ],
+    scoreChanges: [
+      {t:0, home:0, away:0},
+    ],
+  },
+};
+
+let demoInterval = null;
+let homeScore = 0, awayScore = 0;
+let eventsCount = 0;
+let demoEvents = [];
+
+function runDemo() {
+  stopDemo();
+  const key = document.getElementById('demo-select').value;
+  const demo = DEMOS[key];
+  demoEvents = [...demo.events];
+  eventsCount = 0;
+  homeScore = 0; awayScore = 0;
+
+  // set context
+  document.getElementById('sport-val').textContent = demo.sport;
+  document.getElementById('location-val').textContent = demo.location;
+  document.getElementById('league-val').textContent = demo.league;
+  document.getElementById('score-val').textContent = '0-0';
+  document.getElementById('phase-val').textContent = 'kickoff';
+  document.getElementById('events-val').textContent = '0';
+  document.getElementById('events').innerHTML = '<div style="color:#8b949e;font-size:12px">Match starting...</div>';
+  document.getElementById('report-panel').style.display = 'none';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('reel-area').innerHTML = '<div>🎬 <b>' + demo.teams + '</b><br><span style="font-size:12px;color:#8b949e">' + demo.league + ' — ' + demo.location + '</span></div>';
+  document.getElementById('reel-clips').innerHTML = '';
+
+  setStatus('Running demo...', 'running');
+
+  let idx = 0;
+  const total = demoEvents.length;
+  const phases = ['kickoff','open_play','open_play','attack_final_third','attack_final_third','open_play','set_piece','open_play','open_play','attack_final_third','open_play','dead_ball','open_play','full_time'];
+  let phaseIdx = 0;
+
+  demoInterval = setInterval(() => {
+    if (idx >= total) {
+      completeDemo();
+      return;
+    }
+    const ev = demoEvents[idx];
+
+    // update score
+    for (const sc of demo.scoreChanges || []) {
+      if (ev.t >= sc.t && (homeScore !== sc.home || awayScore !== sc.away)) {
+        homeScore = sc.home; awayScore = sc.away;
+      }
+    }
+    document.getElementById('score-val').textContent = `${homeScore}-${awayScore}`;
+    document.getElementById('phase-val').textContent = phases[phaseIdx % phases.length];
+    phaseIdx++;
+
+    // add event to ticker
+    addEvent(ev);
+
+    // add clip thumbnail
+    const clips = document.getElementById('reel-clips');
+    const thumb = document.createElement('div');
+    thumb.className = 'clip-thumb';
+    thumb.title = `[${formatTime(ev.t)}] ${ev.type} — ${ev.desc}`;
+    thumb.innerHTML = `<span class="clip-type" style="background:${ev.type.includes('GOAL')||ev.type==='SIX'?'#3fb950':ev.type.includes('CARD')||ev.type==='FOUL'?'#f0883e':'#58a6ff'}">${ev.type}</span>`;
+    clips.appendChild(thumb);
+
+    eventsCount++;
+    document.getElementById('events-val').textContent = eventsCount;
+    document.getElementById('progress-fill').style.width = `${Math.round((idx+1)/total*100)}%`;
+
+    idx++;
+  }, 800);
+}
+
+function addEvent(ev) {
+  const el = document.getElementById('events');
+  if (el.querySelector('.waiting')) el.innerHTML = '';
+
+  const cssClass = ev.type.includes('GOAL') || ev.type === 'SIX' ? 'goal' :
+                   ev.type.includes('CARD') || ev.type.includes('FOUL') ? 'foul' :
+                   ev.type.includes('VAR') || ev.type.includes('DRS') ? 'var' : '';
+
+  const div = document.createElement('div');
+  div.className = `event ${cssClass}`;
+  div.innerHTML = `<span class="ts">${formatTime(ev.t)}</span>
+                   <span class="type">${ev.type}</span>${ev.team ? ' (' + ev.team + ')' : ''}
+                   <div style="color:#8b949e;font-size:11px;margin-top:2px">${ev.desc}</div>`;
+  el.prepend(div);
+}
+
+function completeDemo() {
+  clearInterval(demoInterval);
+  setStatus('Demo complete', 'complete');
+  document.getElementById('progress-fill').style.width = '100%';
+
+  const panel = document.getElementById('report-panel');
+  panel.style.display = 'block';
+  panel.innerHTML = `<h3>📋 Match Report</h3>
+    <p><b>${document.getElementById('league-val').textContent}</b> — ${document.getElementById('location-val').textContent}</p>
+    <p><b>Final Score:</b> ${document.getElementById('score-val').textContent}</p>
+    <p><b>Key Events:</b> ${eventsCount} detected</p>
+    <p style="margin-top:8px">${demoEvents.map(e => `• <b>[${formatTime(e.t)}]</b> ${e.type} — ${e.desc}`).join('<br>')}</p>`;
+}
+
+function stopDemo() {
+  if (demoInterval) { clearInterval(demoInterval); demoInterval = null; }
+  setStatus('Stopped', 'ready');
+}
+
+function useLive() {
+  stopDemo();
+  window.location.href = '/dashboard';
+}
+
+function setStatus(text, state) {
+  document.getElementById('status-text').textContent =
+    (state === 'running' ? '🟢 ' : state === 'complete' ? '✅ ' : state === 'error' ? '❌ ' : '● ') + text;
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2,'0')}`;
+}
+</script>
+</body>
+</html>

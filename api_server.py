@@ -149,6 +149,12 @@ def dashboard():
     return FileResponse(static_ui / "index.html")
 
 
+@app.get("/demo")
+def demo_page():
+    from fastapi.responses import FileResponse
+    return FileResponse(static_ui / "demo.html")
+
+
 @app.get("/health")
 def health_check():
     vllm_ok = False
