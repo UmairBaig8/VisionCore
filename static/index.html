@@ -1,202 +1,1514 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VidCore — AI Video Analysis</title>
-<style>
-:root{--bg:#080e18;--card:#0f1926;--border:#1a2740;--text:#e2e8f0;--muted:#5c6f87;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;--yellow:#f59e0b;--purple:#8b5cf6;--orange:#f97316;--radius:12px}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-/* ── TOP BAR ── */
-.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.topbar .logo{font-size:18px;font-weight:800;color:var(--blue)}
-.topbar .health{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
-.topbar .dot{width:8px;height:8px;border-radius:50%}
-.topbar .dot.on{background:var(--green)}.topbar .dot.off{background:var(--red)}
-.topbar .dot.loading{background:var(--yellow);animation:pulse 1s infinite}
-.topbar a{color:var(--blue);text-decoration:none;font-size:12px}
-@keyframes pulse{50%{opacity:.4}}
-/* ── LAYOUT ── */
-.layout{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 52px)}
-@media(max-width:900px){.layout{grid-template-columns:1fr}}
-.sidebar{background:var(--card);border-right:1px solid var(--border);padding:16px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:calc(100vh - 52px)}
-.main{padding:16px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 52px)}
-/* ── COMPONENTS ── */
-input,select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;font-size:13px;width:100%}
-.btn{padding:10px 18px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap}
-.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{filter:brightness(1.1)}.btn-primary:disabled{opacity:.4;cursor:not-allowed}
-.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{filter:brightness(1.1)}
-.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{background:var(--border)}
-.btn-sm{padding:6px 12px;font-size:11px}
-.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:18px;text-align:center;cursor:pointer;font-size:12px;color:var(--muted);transition:.15s}.upload-zone:hover{border-color:var(--blue)}
-/* Cards & Panels */
-.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
-.card h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
-/* Stats row */
-.stats-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:2px}
-.stat-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;text-align:center;min-width:80px;flex:1}
-.stat-box .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.stat-box .value{font-size:22px;font-weight:800;margin-top:3px}
-.stat-box .value.score{color:var(--orange)}.stat-box .value.events{color:var(--green)}.stat-box .value.phase{font-size:14px;color:var(--purple)}
-/* Two-col */
-.two-col{display:grid;grid-template-columns:1fr 360px;gap:14px;flex:1;min-height:0}
-@media(max-width:900px){.two-col{grid-template-columns:1fr}}
-/* Video */
-.video-wrap{aspect-ratio:16/9;background:#000;border-radius:var(--radius);overflow:hidden}
-.video-wrap video,.video-wrap .placeholder{width:100%;height:100%;object-fit:contain}
-.video-wrap .placeholder{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);font-size:13px}
-/* Clips */
-.clips-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-top:8px}
-.clip-thumb{min-width:80px;height:45px;background:var(--bg);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;cursor:pointer;border:2px solid transparent;flex-shrink:0;position:relative;color:var(--muted)}
-.clip-thumb:hover{border-color:var(--blue)}
-.clip-thumb .tag{position:absolute;bottom:1px;left:1px;font-size:7px;padding:0 3px;border-radius:2px;background:#000a;color:#fff}
-/* Timeline */
-.timeline{height:6px;background:var(--border);border-radius:999px;position:relative;margin:6px 0}
-.timeline .dot{position:absolute;top:-5px;width:16px;height:16px;border-radius:50%;cursor:pointer;transition:.15s}.timeline .dot:hover{transform:scale(1.3)}
-.t-g{background:var(--green)}.t-r{background:var(--red)}.t-y{background:var(--yellow)}.t-p{background:var(--purple)}.t-b{background:var(--blue)}
-/* Filters */
-.filters{display:flex;gap:6px;flex-wrap:wrap}
-.filter-chip{padding:5px 10px;background:var(--bg);border-radius:999px;font-size:11px;cursor:pointer;border:1px solid transparent}.filter-chip:hover{border-color:var(--blue)}.filter-chip.active{background:var(--blue);color:#fff}
-/* Events */
-.event{border-left:3px solid var(--border);padding:8px 10px;margin-bottom:5px;background:var(--bg);border-radius:0 6px 6px 0;animation:slideIn .25s ease;font-size:12px}
-.event.goal{border-color:var(--green)}.event.foul{border-color:var(--red)}.event.card{border-color:var(--yellow)}.event.var{border-color:var(--purple)}
-.event .e-time{color:var(--blue);font-weight:600;font-size:11px}
-.event .e-type{font-weight:700;margin:2px 0}
-.event .e-desc{color:var(--muted);font-size:11px}
-@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
-/* Bottom grid */
-.report-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
-@media(max-width:900px){.report-grid{grid-template-columns:1fr}}
-/* Video list */
-.vid-item{padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;transition:.1s;display:flex;align-items:center;gap:6px;overflow:hidden}
-.vid-item:hover{background:var(--border)}.vid-item.active{background:#1e3a5f;border:1px solid var(--blue)}
-.vid-item .name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vid-item .size{font-size:10px;color:var(--muted)}
-/* States */
-.empty-state{text-align:center;padding:30px 16px;color:var(--muted);font-size:13px}
-.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
-@keyframes spin{to{transform:rotate(360deg)}}
-/* Progress */
-.progress-wrap{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
-.progress-bar{flex:1;height:4px;background:var(--border);border-radius:999px;overflow:hidden}
-.progress-fill{height:100%;background:var(--blue);transition:width .3s}
-/* Tooltip */
-[title]{position:relative}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VidCore — Premium Sports Video Analytics Console</title>
+  
+  <!-- Modern Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js for Match Momentum Chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* ── DESIGN SYSTEM & CSS VARIABLES ── */
+    :root {
+      --bg-gradient-start: #060b16;
+      --bg-gradient-end: #0a101f;
+      --card-bg: rgba(16, 26, 48, 0.45);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover-border: rgba(59, 130, 246, 0.35);
+      
+      --accent-blue: #2563eb;
+      --accent-blue-glow: rgba(37, 99, 235, 0.4);
+      --accent-emerald: #10b981;
+      --accent-emerald-glow: rgba(16, 185, 129, 0.3);
+      --accent-crimson: #ef4444;
+      --accent-crimson-glow: rgba(239, 68, 68, 0.3);
+      --accent-amber: #f59e0b;
+      --accent-amber-glow: rgba(245, 158, 11, 0.3);
+      --accent-purple: #8b5cf6;
+      --accent-purple-glow: rgba(139, 92, 246, 0.3);
+      
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #64748b;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1, h2, h3, h4, .logo, .stat-value {
+      font-family: 'Outfit', -apple-system, sans-serif;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--card-border);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* ── HEADER / TOP BAR ── */
+    .topbar {
+      background: rgba(10, 18, 36, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #60a5fa, #2563eb);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-icon {
+      width: 24px;
+      height: 24px;
+      background: var(--accent-blue);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 0 12px var(--accent-blue-glow);
+    }
+
+    .nav-tabs {
+      display: flex;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--card-border);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      gap: 4px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .tab-btn.active {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .health {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+
+    .health-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 999px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      position: relative;
+    }
+
+    .dot.on {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+    }
+
+    .dot.off {
+      background: var(--accent-crimson);
+      box-shadow: 0 0 8px var(--accent-crimson);
+    }
+
+    .dot.loading {
+      background: var(--accent-amber);
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.3; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 8px var(--accent-amber); }
+    }
+
+    .api-docs-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: var(--transition);
+    }
+
+    .api-docs-link:hover {
+      color: var(--accent-blue);
+    }
+
+    /* ── MAIN LAYOUT ── */
+    .app-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      flex: 1;
+      height: calc(100vh - 58px);
+      overflow: hidden;
+    }
+
+    @media (max-width: 1024px) {
+      .app-layout {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        display: none !important;
+      }
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      background: rgba(6, 11, 22, 0.6);
+      border-right: 1px solid var(--card-border);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 8px;
+    }
+
+    .upload-zone {
+      border: 2px dashed var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: var(--transition);
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    .upload-zone:hover {
+      border-color: var(--accent-blue);
+      background: rgba(37, 99, 235, 0.05);
+      box-shadow: 0 0 15px rgba(37, 99, 235, 0.05);
+    }
+
+    .upload-zone svg {
+      width: 24px;
+      height: 24px;
+      margin-bottom: 8px;
+      color: var(--text-muted);
+      transition: var(--transition);
+    }
+
+    .upload-zone:hover svg {
+      color: var(--accent-blue);
+      transform: translateY(-2px);
+    }
+
+    .upload-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .upload-subtext {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .video-library {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+      max-height: 200px;
+    }
+
+    .vid-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: var(--transition);
+      font-size: 12px;
+    }
+
+    .vid-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--card-border);
+    }
+
+    .vid-item.active {
+      background: rgba(37, 99, 235, 0.1);
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.1);
+    }
+
+    .vid-name-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .vid-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+
+    .vid-size {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 6px;
+      flex-shrink: 0;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    select, input, textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      transition: var(--transition);
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 8px var(--accent-blue-glow);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: #fff;
+      box-shadow: 0 4px 12px var(--accent-blue-glow);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.15);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-danger {
+      background: var(--accent-crimson);
+      color: #fff;
+    }
+
+    .btn-danger:hover {
+      filter: brightness(1.1);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-secondary);
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: var(--text-muted);
+      color: var(--text-primary);
+    }
+
+    /* ── MAIN CONTENT AREA ── */
+    .main-viewport {
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      height: 100%;
+      padding: 24px;
+      gap: 20px;
+    }
+
+    /* Grid layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 1200px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Card Panels */
+    .panel-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      transition: border-color 0.3s;
+    }
+
+    .panel-card:hover {
+      border-color: var(--card-hover-border);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .panel-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── TELEMETRY SCOREBOARD ── */
+    .telemetry-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .tel-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tel-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: transparent;
+    }
+
+    .tel-card.score::before { background: var(--accent-amber); }
+    .tel-card.events::before { background: var(--accent-emerald); }
+    .tel-card.phase::before { background: var(--accent-purple); }
+    .tel-card.sport::before { background: var(--accent-blue); }
+
+    .tel-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .tel-value {
+      font-size: 24px;
+      font-weight: 800;
+      margin-top: 6px;
+      line-height: 1.2;
+    }
+
+    .tel-value.score-style {
+      color: var(--accent-amber);
+      font-size: 28px;
+      letter-spacing: -1px;
+    }
+
+    .tel-value.events-style {
+      color: var(--accent-emerald);
+    }
+
+    .tel-value.phase-style {
+      font-size: 14px;
+      color: var(--accent-purple);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .tel-value.small-style {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    /* ── VIDEO PLAYER & MOBILE 9:16 CROP ── */
+    .player-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .player-window {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .video-element {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .player-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      gap: 12px;
+      font-size: 13px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    /* Live Loading Spinner inside Player */
+    .player-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.05);
+      border-top-color: var(--accent-blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 9:16 Social Media Crop Pillarboxes overlay */
+    .crop-overlay-916 {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      pointer-events: none;
+      display: none;
+      grid-template-columns: 1fr calc(16% * (9/16)) 1fr; /* Center is 9:16 relative to height */
+      z-index: 10;
+    }
+
+    .crop-pillar {
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(2px);
+      border-left: 1px dashed rgba(255, 255, 255, 0.25);
+      border-right: 1px dashed rgba(255, 255, 255, 0.25);
+      position: relative;
+    }
+
+    .crop-pillar-left {
+      border-right: 1px dashed rgba(255, 255, 255, 0.3);
+    }
+
+    .crop-pillar-right {
+      border-left: 1px dashed rgba(255, 255, 255, 0.3);
+    }
+
+    .crop-label-tag {
+      position: absolute;
+      top: 10px;
+      background: var(--accent-amber);
+      color: #000;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+      pointer-events: auto;
+    }
+
+    .crop-pillar-left .crop-label-tag { right: 10px; }
+    .crop-pillar-right .crop-label-tag { left: 10px; }
+
+    /* Player Tools */
+    .player-tools {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px;
+    }
+
+    .player-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    /* ── DYNAMIC CLIPS CAROUSEL ── */
+    .clips-carousel-panel {
+      margin-top: 4px;
+    }
+
+    .clips-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 4px 0 12px 0;
+    }
+
+    .clip-card {
+      min-width: 120px;
+      width: 120px;
+      height: 68px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: var(--transition);
+    }
+
+    .clip-card:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+    }
+
+    .clip-card-overlay {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 40%, rgba(0, 0, 0, 0.8) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px;
+    }
+
+    .clip-badge {
+      font-size: 8px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 3px;
+      color: #fff;
+      align-self: flex-start;
+      text-transform: uppercase;
+    }
+
+    .clip-time {
+      font-size: 9px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 1px 3px;
+      border-radius: 2px;
+      align-self: flex-end;
+    }
+
+    /* ── TICKER (LIVE EVENT TICKER) ── */
+    .ticker-panel {
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 100px);
+      height: 100%;
+    }
+
+    .ticker-filter-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .ticker-chip {
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: var(--transition);
+    }
+
+    .ticker-chip:hover {
+      border-color: var(--text-muted);
+      color: var(--text-primary);
+    }
+
+    .ticker-chip.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #fff;
+      box-shadow: 0 2px 8px var(--accent-blue-glow);
+    }
+
+    .ticker-events-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 250px;
+    }
+
+    .ticker-item {
+      border-left: 3px solid var(--text-muted);
+      background: rgba(255, 255, 255, 0.01);
+      border-top: 1px solid var(--card-border);
+      border-right: 1px solid var(--card-border);
+      border-bottom: 1px solid var(--card-border);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: var(--transition);
+      animation: slideIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    }
+
+    .ticker-item:hover {
+      background: rgba(255, 255, 255, 0.03);
+      border-color: var(--text-muted);
+      transform: translateX(2px);
+    }
+
+    .ticker-item.goal { border-left-color: var(--accent-emerald); }
+    .ticker-item.foul { border-left-color: var(--accent-crimson); }
+    .ticker-item.card-y { border-left-color: var(--accent-amber); }
+    .ticker-item.var { border-left-color: var(--accent-purple); }
+
+    .ticker-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ticker-item-time {
+      font-size: 11px;
+      color: var(--accent-blue);
+      font-weight: 700;
+    }
+
+    .ticker-item-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .ticker-item-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── AGENT TELEMETRY MONITOR ── */
+    .agent-monitor-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .agent-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--card-border);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+    }
+
+    .agent-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .agent-avatar {
+      width: 28px;
+      height: 28px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .agent-name {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .agent-desc {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .agent-status-tag {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .agent-status-tag.active {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent-emerald);
+      animation: pulseActive 1.5s infinite;
+    }
+
+    @keyframes pulseActive {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+      70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* ── TACTICAL PITCH / FIELD CANVAS ── */
+    .tactical-pitch-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .pitch-container {
+      width: 100%;
+      background: #0d1a10;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      aspect-ratio: 1.5 / 1;
+      position: relative;
+    }
+
+    .pitch-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* ── EVENT TIMELINE BAR ── */
+    .timeline-panel {
+      margin-top: 4px;
+    }
+
+    .timeline-bar {
+      height: 10px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      position: relative;
+      margin: 10px 0;
+    }
+
+    .timeline-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent-blue-glow);
+      border-radius: 999px;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .timeline-marker {
+      position: absolute;
+      top: -4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid var(--bg-gradient-end);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      transition: var(--transition);
+      z-index: 2;
+    }
+
+    .timeline-marker:hover {
+      transform: scale(1.4);
+      z-index: 5;
+    }
+
+    .timeline-marker.goal { background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald-glow); }
+    .timeline-marker.foul { background: var(--accent-crimson); box-shadow: 0 0 8px var(--accent-crimson-glow); }
+    .timeline-marker.card-y { background: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber-glow); }
+    .timeline-marker.var { background: var(--accent-purple); box-shadow: 0 0 8px var(--accent-purple-glow); }
+
+    /* ── MATCH MOMENTUM GRAPH panel ── */
+    .momentum-graph-container {
+      margin-top: 10px;
+    }
+
+    /* ── VIEW TABS & SECTIONS ── */
+    .view-section {
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .view-section.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── STYLED MARKDOWN MATCH REPORT ── */
+    .report-layout {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .report-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .report-document {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      max-height: 600px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+
+    .report-document h1, .report-document h2, .report-document h3 {
+      color: var(--text-primary);
+      margin-top: 18px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .report-document h1 { font-size: 20px; border-bottom: 1px solid var(--card-border); padding-bottom: 8px; }
+    .report-document h2 { font-size: 16px; }
+    .report-document h3 { font-size: 14px; }
+    .report-document p { margin-bottom: 12px; }
+    .report-document ul, .report-document ol { margin-bottom: 12px; padding-left: 20px; }
+    .report-document li { margin-bottom: 6px; }
+    .report-document hr { border: none; border-top: 1px solid var(--card-border); margin: 16px 0; }
+    .report-document code { background: rgba(255, 255, 255, 0.05); padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+
+    /* Match Info Details */
+    .info-list-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 13px;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .info-label {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .info-value {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* ── HIGHLIGHTS STUDIO LAYOUT ── */
+    .studio-grid {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .studio-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── EMPTY STATES & PROGRESS ── */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .progress-bar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .progress-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .progress-track {
+      height: 6px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-blue), #60a5fa);
+      box-shadow: 0 0 10px var(--accent-blue-glow);
+      transition: width 0.3s ease;
+    }
+  </style>
 </head>
 <body>
 
-<!-- ═══ TOP BAR ═══ -->
-<header class="topbar">
-  <span class="logo">◉ VidCore</span>
-  <div class="health">
-    <span class="dot loading" id="health-dot"></span>
-    <span id="health-text">Checking...</span>
-    <a href="/demo" style="margin-left:12px">Demo</a>
-    <a href="/docs" target="_blank">API Docs</a>
-  </div>
-</header>
+  <!-- ═══ TOP HEADER BAR ═══ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">◉</div>
+      <span class="logo">VidCore</span>
+    </div>
+    
+    <!-- Tab Controls -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('live-console')">
+        📊 Live Console
+      </button>
+      <button class="tab-btn" onclick="switchTab('highlights-studio')">
+        🎬 Highlights Studio
+      </button>
+      <button class="tab-btn" onclick="switchTab('match-reports')">
+        📋 Match Reports
+      </button>
+      <button class="tab-btn" onclick="switchTab('media-library')">
+        📁 Media Library
+      </button>
+    </nav>
 
-<!-- ═══ LAYOUT ═══ -->
-<div class="layout">
-
-<!-- SIDEBAR -->
-<aside class="sidebar">
-  <div class="upload-zone" onclick="document.getElementById('upload-input').click()">
-    📤 Drop video or click to upload
-    <input type="file" id="upload-input" accept="video/*" style="display:none" onchange="uploadVideo()">
-  </div>
-
-  <div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">VIDEO LIBRARY</div>
-    <div id="video-list"><div class="empty-state">Loading...</div></div>
-  </div>
-
-  <select id="depth-select">
-    <option value="fast">Fast (scene + events)</option>
-    <option value="scene-only">Scene only (fastest)</option>
-    <option value="full">Full (scene + event + analysis)</option>
-  </select>
-
-  <button class="btn btn-primary" onclick="startAnalysis()" id="analyze-btn">▶ Start Analysis</button>
-  <button class="btn btn-danger btn-sm" onclick="stopAnalysis()" id="stop-btn" style="display:none">✕ Stop</button>
-
-  <div class="progress-wrap" id="progress-area" style="display:none">
-    <span id="progress-label">0%</span>
-    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-  </div>
-
-  <div style="font-size:11px;color:var(--muted);margin-top:8px">REEL FLAVORS</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('all')">All Highlights</button>
-    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('goals')">Goals Only</button>
-    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('drama')">Drama</button>
-    <button class="btn btn-outline btn-sm" onclick="loadFlavorReel('social_goals')">Social 9:16</button>
-  </div>
-
-  <div style="font-size:11px;color:var(--muted);margin-top:8px">EXPORT</div>
-  <button class="btn btn-outline btn-sm" onclick="downloadCSV()">📥 Download CSV</button>
-  <button class="btn btn-outline btn-sm" onclick="downloadReport()">📄 Download Report</button>
-</aside>
-
-<!-- MAIN -->
-<main class="main" id="main-content">
-
-  <!-- Stats Row -->
-  <div class="stats-row" id="stats-row">
-    <div class="stat-box"><div class="label">Score</div><div class="value score" id="score-val">0-0</div></div>
-    <div class="stat-box"><div class="label">Events</div><div class="value events" id="events-val">0</div></div>
-    <div class="stat-box"><div class="label">Sport</div><div class="value" id="sport-val" style="font-size:14px">--</div></div>
-    <div class="stat-box"><div class="label">Phase</div><div class="value phase" id="phase-val">idle</div></div>
-    <div class="stat-box"><div class="label">Type</div><div class="value" id="type-val" style="font-size:13px">--</div></div>
-    <div class="stat-box"><div class="label">Location</div><div class="value" id="location-val" style="font-size:12px">--</div></div>
-  </div>
-
-  <!-- Two Column -->
-  <div class="two-col">
-    <!-- Left -->
-    <div class="card" style="display:flex;flex-direction:column;gap:10px">
-      <h3>🎬 Reel Player</h3>
-      <div class="video-wrap" id="reel-wrap">
-        <div class="placeholder">▶ Start analysis to see reels</div>
+    <!-- Health Telemetry -->
+    <div class="health">
+      <div class="health-status">
+        <span class="dot loading" id="health-dot"></span>
+        <span id="health-text">Checking Engine Status...</span>
       </div>
-      <div class="clips-row" id="clips-row"></div>
-      <h3 style="margin-top:8px">📊 Event Timeline</h3>
-      <div class="timeline" id="timeline-bar"></div>
-      <div class="filters">
-        <span class="filter-chip active" data-filter="all" onclick="setFilter('all',this)">All</span>
-        <span class="filter-chip" data-filter="GOAL" onclick="setFilter('GOAL',this)">Goals</span>
-        <span class="filter-chip" data-filter="CARD" onclick="setFilter('CARD',this)">Cards</span>
-        <span class="filter-chip" data-filter="FOUL" onclick="setFilter('FOUL',this)">Fouls</span>
+      <a href="/demo" class="api-docs-link">Demo Server</a>
+      <a href="/docs" target="_blank" class="api-docs-link">API Docs</a>
+    </div>
+  </header>
+
+  <!-- ═══ MAIN APP LAYOUT ═══ -->
+  <div class="app-layout">
+
+    <!-- SIDEBAR CONTROLS -->
+    <aside class="sidebar">
+      <div>
+        <div class="sidebar-section-title">Upload Video</div>
+        <div class="upload-zone" onclick="document.getElementById('upload-input').click()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <div class="upload-text">Select Sports Video</div>
+          <div class="upload-subtext">Drop .mp4, .mov, or .avi</div>
+          <input type="file" id="upload-input" accept="video/*" style="display:none" onchange="uploadVideo()">
+        </div>
       </div>
-    </div>
 
-    <!-- Right: Ticker -->
-    <div class="card" style="overflow-y:auto;max-height:calc(100vh - 280px)">
-      <h3>📡 Live Event Ticker</h3>
-      <div id="events"><div class="empty-state">Start analysis to see live events</div></div>
-    </div>
+      <div>
+        <div class="sidebar-section-title">Video Queue</div>
+        <div class="video-library" id="video-list">
+          <div class="empty-state">Loading library...</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sidebar-section-title">Analysis Depth</div>
+        <div class="form-group">
+          <select id="depth-select">
+            <option value="fast">Fast (Scene + Events)</option>
+            <option value="scene-only">Scene Only (Fastest)</option>
+            <option value="full" selected>Full Match (Scene + Events + Multi-Agent Details)</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <button class="btn btn-primary" onclick="startAnalysis()" id="analyze-btn">▶ Run Core Orchestration</button>
+        <button class="btn btn-danger" onclick="stopAnalysis()" id="stop-btn" style="display:none; margin-top: 8px;">✕ Cancel Execution</button>
+      </div>
+
+      <!-- Live Job Progress -->
+      <div class="progress-bar-container" id="progress-area" style="display:none;">
+        <div class="progress-label-row">
+          <span>Processing Telemetry</span>
+          <span id="progress-label">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+
+      <div style="margin-top: auto;">
+        <div class="sidebar-section-title">System Exports</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+          <button class="btn btn-outline" style="padding: 8px; font-size: 11px;" onclick="downloadCSV()">📥 CSV Logs</button>
+          <button class="btn btn-outline" style="padding: 8px; font-size: 11px;" onclick="downloadReport()">📄 Text Report</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN DYNAMIC VIEWPORT -->
+    <main class="main-viewport" id="main-content">
+
+      <!-- ────── TABS: 1. LIVE CONSOLE ────── -->
+      <div id="live-console" class="view-section active">
+        <div class="dashboard-grid">
+          
+          <!-- Left Column -->
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            
+            <!-- Telemetry Scoreboard -->
+            <div class="telemetry-row">
+              <div class="tel-card score">
+                <div class="tel-label">Live Score</div>
+                <div class="tel-value score-style" id="score-val">0-0</div>
+              </div>
+              <div class="tel-card events">
+                <div class="tel-label">Events Logged</div>
+                <div class="tel-value events-style" id="events-val">0</div>
+              </div>
+              <div class="tel-card phase">
+                <div class="tel-label">Play Phase</div>
+                <div class="tel-value phase-style" id="phase-val">Idle</div>
+              </div>
+              <div class="tel-card sport">
+                <div class="tel-label">Classification</div>
+                <div class="tel-value small-style" id="sport-val">Sport: --</div>
+                <div class="tel-value small-style" id="type-val" style="margin-top: 2px; font-size: 11px;">Type: --</div>
+              </div>
+            </div>
+
+            <!-- Video Player Console -->
+            <div class="panel-card player-container">
+              <div class="panel-header">
+                <div class="panel-title">🎬 Main Analytical Stream</div>
+                <div class="player-btn-group">
+                  <button class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;" onclick="toggleMobileCrop()">📱 9:16 Social Overlay</button>
+                </div>
+              </div>
+              
+              <div class="player-window" id="player-window">
+                <div class="player-placeholder" id="player-placeholder">
+                  <div class="player-spinner" style="display:none;" id="player-spinner"></div>
+                  <span id="player-placeholder-msg">Select a video and run core orchestration to view analytical feed</span>
+                </div>
+                
+                <!-- 9:16 vertical crop guide overlay -->
+                <div class="crop-overlay-916" id="crop-overlay">
+                  <div class="crop-pillar crop-pillar-left">
+                    <span class="crop-label-tag">Cut Pillar</span>
+                  </div>
+                  <div></div> <!-- Clear middle -->
+                  <div class="crop-pillar crop-pillar-right">
+                    <span class="crop-label-tag">Cut Pillar</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Interactive Timeline -->
+              <div class="timeline-panel">
+                <div class="tel-label">Interactive Event Timeline</div>
+                <div class="timeline-bar" id="timeline-bar">
+                  <div class="timeline-progress-fill" id="timeline-progress"></div>
+                </div>
+              </div>
+
+              <!-- Real-time cut clips row -->
+              <div class="clips-carousel-panel">
+                <div class="tel-label" style="margin-bottom: 6px;">Live Cut Clips (Jump on Click)</div>
+                <div class="clips-row" id="clips-row">
+                  <div style="font-size: 11px; color: var(--text-muted); padding: 10px 0;">No clips cut yet</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Match Momentum Graph -->
+            <div class="panel-card momentum-graph-container">
+              <div class="panel-header">
+                <div class="panel-title">📈 Play Momentum & Dominance Trend</div>
+                <span style="font-size: 11px; color: var(--text-muted);">Dynamically updated by events</span>
+              </div>
+              <div style="height: 160px; position: relative; width: 100%;">
+                <canvas id="momentum-chart"></canvas>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right Column (Ticker & Agents) -->
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            
+            <!-- Agent Telemetry -->
+            <div class="panel-card agent-monitor-panel">
+              <div class="panel-header">
+                <div class="panel-title">🤖 Multi-Agent Telemetry</div>
+              </div>
+              
+              <div class="agent-row">
+                <div class="agent-info">
+                  <div class="agent-avatar">👁️</div>
+                  <div>
+                    <div class="agent-name">Scene Classifier</div>
+                    <div class="agent-desc">Frames descriptions & type detection</div>
+                  </div>
+                </div>
+                <span class="agent-status-tag" id="agent-scene-status">Idle</span>
+              </div>
+
+              <div class="agent-row">
+                <div class="agent-info">
+                  <div class="agent-avatar">🎯</div>
+                  <div>
+                    <div class="agent-name">Event Detector</div>
+                    <div class="agent-desc">Flags fouls, cards, and goals</div>
+                  </div>
+                </div>
+                <span class="agent-status-tag" id="agent-event-status">Idle</span>
+              </div>
+
+              <div class="agent-row">
+                <div class="agent-info">
+                  <div class="agent-avatar">🧠</div>
+                  <div>
+                    <div class="agent-name">Reasoning Engine</div>
+                    <div class="agent-desc">Infers context & score tracking</div>
+                  </div>
+                </div>
+                <span class="agent-status-tag" id="agent-reasoning-status">Idle</span>
+              </div>
+
+              <div class="agent-row">
+                <div class="agent-info">
+                  <div class="agent-avatar">🎙️</div>
+                  <div>
+                    <div class="agent-name">Commentary Writer</div>
+                    <div class="agent-desc">Drafts textual summaries & reports</div>
+                  </div>
+                </div>
+                <span class="agent-status-tag" id="agent-commentary-status">Idle</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Field Pitch Visualizer -->
+            <div class="panel-card tactical-pitch-panel">
+              <div class="panel-header" style="width: 100%;">
+                <div class="panel-title">📍 Play Focus Grid</div>
+                <span style="font-size: 11px; color: var(--text-muted);" id="sport-field-label">Field Map</span>
+              </div>
+              <div class="pitch-container">
+                <canvas class="pitch-canvas" id="pitch-canvas"></canvas>
+              </div>
+            </div>
+
+            <!-- Event Ticker -->
+            <div class="panel-card ticker-panel">
+              <div class="panel-header">
+                <div class="panel-title">📡 Live Telemetry Ticker</div>
+              </div>
+              
+              <!-- Filter Chips -->
+              <div class="ticker-filter-bar" id="ticker-filters">
+                <span class="ticker-chip active" onclick="setFilter('all', this)">All Events</span>
+                <span class="ticker-chip" onclick="setFilter('GOAL', this)">⚽ Goals/Runs</span>
+                <span class="ticker-chip" onclick="setFilter('FOUL', this)">🟥 Fouls/Wickets</span>
+                <span class="ticker-chip" onclick="setFilter('CARD', this)">🟨 Cards</span>
+                <span class="ticker-chip" onclick="setFilter('VAR', this)">📺 VAR</span>
+              </div>
+
+              <div class="ticker-events-list" id="events">
+                <div class="empty-state">Start analysis to receive live event feed</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ────── TABS: 2. HIGHLIGHTS STUDIO ────── -->
+      <div id="highlights-studio" class="view-section">
+        <div class="studio-grid">
+          
+          <!-- Large player and controls -->
+          <div class="panel-card player-container">
+            <div class="panel-header">
+              <div class="panel-title">🎬 Compilation Studio Playback</div>
+              
+              <!-- Segmented Flavor selector -->
+              <div class="nav-tabs" style="border-radius: var(--radius-sm); padding: 2px;">
+                <button class="tab-btn active" style="font-size: 11px; padding: 6px 12px;" onclick="loadStudioReel('all', this)">Full Reel</button>
+                <button class="tab-btn" style="font-size: 11px; padding: 6px 12px;" onclick="loadStudioReel('goals', this)">Goals Highlight</button>
+                <button class="tab-btn" style="font-size: 11px; padding: 6px 12px;" onclick="loadStudioReel('drama', this)">Drama Cut</button>
+                <button class="tab-btn" style="font-size: 11px; padding: 6px 12px;" onclick="loadStudioReel('social_goals', this)">Social (9:16)</button>
+              </div>
+            </div>
+
+            <div class="player-window" id="studio-player-window">
+              <div class="player-placeholder">
+                <span>Run analysis to compile highlight reels</span>
+              </div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+              <span style="font-size: 12px; color: var(--text-muted);" id="studio-playback-status">Flavor: Full Reel</span>
+              <button class="btn btn-outline" style="width: auto; padding: 8px 16px;" onclick="downloadActiveReel()">📥 Download Compiled MP4</button>
+            </div>
+          </div>
+
+          <!-- Video segments lists -->
+          <div class="panel-card" style="max-height: 480px; overflow-y: auto;">
+            <div class="panel-header">
+              <div class="panel-title">📂 Segment Library</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;" id="studio-clips-list">
+              <div class="empty-state">No clips compiled. Run analysis first.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ────── TABS: 3. MATCH REPORTS ────── -->
+      <div id="match-reports" class="view-section">
+        <div class="report-layout">
+          
+          <!-- Main Markdown Document -->
+          <div class="panel-card" style="display:flex; flex-direction:column; gap:16px;">
+            <div class="panel-header">
+              <div class="panel-title">📋 Multi-Agent Match Commentary Report</div>
+              <button class="btn btn-outline" style="width: auto; padding: 8px 16px;" onclick="copyReportText()">📋 Copy Report</button>
+            </div>
+            <div class="report-document" id="report-content">
+              <div class="empty-state">No report generated. Generate match report by running core orchestration.</div>
+            </div>
+          </div>
+
+          <!-- Side info and charts -->
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">📍 Event Details</div>
+              </div>
+              <div class="info-list-card" id="info-content">
+                <div class="empty-state">No data available</div>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="panel-header">
+                <div class="panel-title">📊 Activity Stats</div>
+              </div>
+              <div class="info-list-card" id="stats-content">
+                <div class="empty-state">No data available</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ────── TABS: 4. MEDIA LIBRARY ────── -->
+      <div id="media-library" class="view-section">
+        <div class="panel-card" style="max-width: 800px; margin: 0 auto;">
+          <div class="panel-header">
+            <div class="panel-title">📁 System Files & Processing Archives</div>
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:16px; margin-top:10px;">
+            <p style="font-size:13px; color:var(--text-secondary); line-height:1.5;">
+              VidCore tracks previous match analyses in local storage. Double click any file in the list below to review its generated report, clips, and momentum telemetry logs without re-running the model.
+            </p>
+            
+            <div class="video-library" id="library-full-list" style="max-height: none; height: auto;">
+              <div class="empty-state">Loading library details...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
   </div>
 
-  <!-- Bottom: Report Grid -->
-  <div class="report-grid">
-    <div class="card" style="max-height:250px;overflow-y:auto">
-      <h3>📋 Match Report</h3>
-      <div id="report-content"><div class="empty-state">Report generated after analysis</div></div>
-    </div>
-    <div class="card">
-      <h3>📈 Match Stats</h3>
-      <div id="stats-content"><div class="empty-state">--</div></div>
-    </div>
-    <div class="card">
-      <h3>📍 Match Info</h3>
-      <div id="info-content"><div class="empty-state">--</div></div>
-    </div>
-  </div>
-
-</main>
-</div>
-
-<script src="/static/app.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>
