@@ -255,8 +255,12 @@ function initPitch() {
   pitchCanvas = document.getElementById('pitch-canvas');
   if (!pitchCanvas) return;
   pitchCtx = pitchCanvas.getContext('2d');
-  resizePitchCanvas();
-  drawPitch();
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      resizePitchCanvas();
+      drawPitch();
+    });
+  });
 }
 
 function resizePitchCanvas() {
@@ -264,7 +268,7 @@ function resizePitchCanvas() {
   const rect = pitchCanvas.parentElement.getBoundingClientRect();
   pitchCanvas.width = rect.width * window.devicePixelRatio;
   pitchCanvas.height = rect.height * window.devicePixelRatio;
-  pitchCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  pitchCtx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
 }
 
 function drawPitch() {
