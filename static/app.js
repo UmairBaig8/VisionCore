@@ -411,7 +411,7 @@ async function startAnalysis() {
   resetDashboardUI();
   
   const depth = document.getElementById('depth-select').value;
-  const r = await fetch(`${API}/analyze?video=${encodeURIComponent(selectedVideo)}&depth=${depth}&interval=1.0`);
+  const r = await fetch(`${API}/analyze?video=${encodeURIComponent(selectedVideo)}&depth=${depth}&interval=1.0`, { method: 'POST' });
   const job = await r.json();
   jobId = job.job_id;
 
