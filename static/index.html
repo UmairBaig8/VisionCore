@@ -1965,7 +1965,10 @@ function startVideoIfReady() {
 
 function markCheck(id, val) {
   const el = document.getElementById(id);
-  if (el) { el.classList.add('done'); el.querySelector('.check-dot').textContent = '✓'; }
+  if (!el) return;
+  el.classList.add('done');
+  const dot = el.querySelector('.check-dot');
+  if (dot) dot.textContent = '✓';
 }
 
 // ── PLAY DETECT OVERLAYS & 9:16 CROP ──
@@ -2190,7 +2193,10 @@ function handleWebSocketEvent(data) {
       if (data.phase) { currentPhase = data.phase; setStat('phase-val', currentPhase); }
       if (data.score) setStat('score-val', data.score);
       if (data.sport) { setStat('sport-val', data.sport); markCheck('check-sport', data.sport); }
+      if (data.video_type) markCheck('check-type', data.video_type);
+      if (data.location && data.location !== 'unknown') markCheck('check-location', data.location);
       drawPitch();
+      startVideoIfReady();
       break;
       
     case 'phase':

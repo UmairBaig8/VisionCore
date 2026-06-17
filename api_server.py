@@ -304,7 +304,7 @@ async def sse_stream(job_id: str):
                         yield f"data: {json.dumps({'type':'key_event','event_type':ev.get('type',''),'timestamp':ev.get('timestamp',''),'team':ev.get('team',''),'player':ev.get('player',''),'description':ev.get('global_time','')})}\n\n"
                     last_events = current
 
-                yield f"data: {json.dumps({'type':'status','score':ctx.score_string(),'sport':ctx.sport,'phase':ctx.phase,'events':last_events})}\n\n"
+                yield f"data: {json.dumps({'type':'status','score':ctx.score_string(),'sport':ctx.sport,'phase':ctx.phase,'events':last_events,'video_type':ctx.video_type,'location':ctx.location})}\n\n"
 
             if job.get("status") in ("complete", "error"):
                 yield f"data: {json.dumps({'type':'complete','status':job['status']})}\n\n"
