@@ -49,16 +49,14 @@ def manual_e2e(video_path="videos/10.mp4"):
     time.sleep(5)
 
     # 6. check status
-    for _ in range(60):  # poll for 60s
+    for _ in range(60):
         r = requests.get(f"{BASE}/status/{job_id}")
         status = r.json()
-        s = status["status"]
-        ctx = status.get("context", {})
-        if ctx:
-            print(f"6. Status: {s} | sport={ctx.get('sport','?')} "
-                  f"score={ctx.get('score','?')} events={ctx.get('key_events_count',0)}")
-        else:
-            print(f"6. Status: {s}")
+        s = status.get("status", "?")
+        sport = status.get("sport", "?")
+        score = status.get("score", "?")
+        events = status.get("key_events_count", 0)
+        print(f"6. Status: {s} | {sport} | {score} | events={events}")
         if s in ("complete", "error"):
             break
         time.sleep(3)

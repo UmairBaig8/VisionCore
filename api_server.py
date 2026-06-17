@@ -205,10 +205,23 @@ def job_status(job_id: str):
     job = jobs.get(job_id)
     if not job:
         return JSONResponse({"error": "Job not found"}, status_code=404)
+
+    orch = job.get("orchestrator")
+    ctx = None
+    sport = job.get("sport", "unknown")
+    score = job.get("score", "0-0")
+    events_count = len(job.get("key_events", []))
+
+    if orch and orch.ctx:
+        ctx = orch.ctx.summary()
+        sport = orch.ctx.sport
+        score = orch.ctx.score_string()
+        events_count = len(orch.ctx.key_events)
+
     return {"id": job_id, "status": job["status"],
             "result": job.get("result"), "error": job.get("error"),
-            "context": job.get("context"), "sport": job.get("sport"),
-            "score": job.get("score")}
+            "sport": sport, "score": score,
+            "context": ctx, "key_events_count": events_count}
 
 
 @app.delete("/jobs/{job_id}")
