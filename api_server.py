@@ -74,6 +74,9 @@ class WebSocketEmitter(EventEmitter):
                      "video_type": video_type, "location": location,
                      "league": league, "teams": teams})
 
+    def on_agent_active(self, agent_name):
+        self._send({"type": "agent_active", "agent": agent_name})
+
     def on_scene(self, timestamp, scene_type, activity, scene_raw):
         self._send({"type": "scene", "timestamp": timestamp,
                      "scene_type": scene_type, "activity": activity})

@@ -10,6 +10,9 @@ class EventEmitter:
     def on_detection(self, sport, video_type, location, league, teams):
         pass
 
+    def on_agent_active(self, agent_name):
+        pass
+
     def on_scene(self, timestamp, scene_type, activity, scene_raw):
         pass
 

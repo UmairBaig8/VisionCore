@@ -294,6 +294,9 @@ class VideoOrchestrator:
         if self.verbose:
             print(f"  [router] {msg}", file=sys.stderr)
 
+    def _emit_agent(self, name):
+        self.emitter.on_agent_active(name)
+
     def run(self):
         cfg = load_config()
         agents = AgentLoader().load()
@@ -409,6 +412,7 @@ class VideoOrchestrator:
             t_scene = time.time()
             scene_desc = _ask_with_retry(client, scene_prompt, image_b64, label="scene")
             t_scene = time.time() - t_scene
+            self._emit_agent("scene")
             if scene_desc is None:
                 continue
 
@@ -420,6 +424,7 @@ class VideoOrchestrator:
                 sb_b64 = encode_frame(crop)
                 if sb_b64:
                     sb_result = _ask_with_retry(client, scoreboard_prompt, sb_b64, label="scoreboard")
+                    self._emit_agent("scoreboard")
                     if sb_result:
                         sb_parsed = _parse_json_safe(sb_result)
                         sb_score = sb_parsed.get("score", "")
@@ -471,6 +476,7 @@ class VideoOrchestrator:
                     label="event"
                 )
                 t_event = time.time() - t0
+                self._emit_agent("event")
                 if event_str and sport_events_prompt:
                     parsed = _parse_json_safe(event_str)
                     events = parsed.get("events", [])
@@ -522,6 +528,8 @@ class VideoOrchestrator:
                     reasoning_str = r.get("reasoning")
                     commentary_str = r.get("commentary")
                     t_analysis = time.time() - t0
+                    self._emit_agent("reasoning")
+                    self._emit_agent("commentary")
 
             # ── immediate clip generation for live reel ──
             if live_reel and key_events:

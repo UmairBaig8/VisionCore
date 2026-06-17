@@ -2184,6 +2184,10 @@ function handleWebSocketEvent(data) {
       document.getElementById('analyze-btn').textContent = '⚡ Analyzing frames...';
       break;
 
+    case 'agent_active':
+      flashAgent(data.agent);
+      break;
+
     case 'detection':
       // detection phase complete — update UI immediately
       if (data.sport) {
@@ -2208,7 +2212,6 @@ function handleWebSocketEvent(data) {
       
     case 'scene':
       startVideoIfReady();
-      flashAgent('scene');
       if (data.activity) {
         // Feed rolling momentum chart dynamically based on keywords
         let randMomentum = 50;
@@ -2225,8 +2228,6 @@ function handleWebSocketEvent(data) {
       break;
 
     case 'key_event':
-      flashAgent('event');
-      flashAgent('reasoning');
       addTickerEvent(data);
       addTimelineMarker(data);
       
@@ -2423,7 +2424,6 @@ async function onProcessingComplete(data) {
   document.getElementById('stop-btn').style.display = 'none';
   setStat('phase-val', 'Complete');
   setProgressBar(100);
-  flashAgent('commentary');
 
   // Update reel source if available
   const playerWindow = document.getElementById('player-window');
