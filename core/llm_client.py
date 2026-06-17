@@ -1,0 +1,47 @@
+import requests
+
+
+class VLLMClient:
+
+    def __init__(self, endpoint, model):
+
+        self.endpoint = endpoint
+        self.model = model
+
+    def ask(self, prompt, image_b64=None):
+
+        content = []
+
+        if image_b64:
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{image_b64}"
+                }
+            })
+
+        content.append({
+            "type": "text",
+            "text": prompt
+        })
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            "temperature": 0.1
+        }
+
+        response = requests.post(
+            self.endpoint,
+            json=payload,
+            timeout=300
+        )
+
+        response.raise_for_status()
+
+        return response.json()["choices"][0]["message"]["content"]
