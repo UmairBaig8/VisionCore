@@ -342,6 +342,14 @@ class VideoOrchestrator:
               f"{geo.get('stadium', geo.get('city', '') or 'unknown')} | "
               f"{sport_id} ({sport_info.get('confidence', 0):.0%})")
 
+        self.emitter.on_detection(
+            sport=sport_id,
+            video_type=vt,
+            location=geo.get("stadium", geo.get("city", "")),
+            league=geo.get("league", ""),
+            teams=geo.get("teams", []),
+        )
+
         # ── build context ──
         self.ctx = MatchContext(
             sport=sport_id,

@@ -69,6 +69,11 @@ class WebSocketEmitter(EventEmitter):
         except Exception:
             pass
 
+    def on_detection(self, sport, video_type, location, league, teams):
+        self._send({"type": "detection", "sport": sport,
+                     "video_type": video_type, "location": location,
+                     "league": league, "teams": teams})
+
     def on_scene(self, timestamp, scene_type, activity, scene_raw):
         self._send({"type": "scene", "timestamp": timestamp,
                      "scene_type": scene_type, "activity": activity})

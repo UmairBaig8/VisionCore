@@ -2173,6 +2173,27 @@ function handleWebSocketEvent(data) {
       document.getElementById('events').innerHTML = '';
       document.getElementById('analyze-btn').textContent = '⚡ Analyzing frames...';
       break;
+
+    case 'detection':
+      // detection phase complete — update UI immediately
+      if (data.sport) {
+        markCheck('check-sport', data.sport);
+        setStat('sport-val', 'Sport: ' + data.sport);
+        currentSport = data.sport;
+        document.getElementById('sport-field-label').textContent = data.sport.toUpperCase() + ' GRAPH';
+      }
+      if (data.video_type) {
+        markCheck('check-type', data.video_type);
+        setStat('type-val', 'Match Type: ' + data.video_type);
+      }
+      if (data.location && data.location !== 'unknown') {
+        markCheck('check-location', data.location);
+        setStat('location-val', data.location);
+      }
+      document.getElementById('classify-status').textContent = 'Detection complete — starting analysis...';
+      drawPitch();
+      startVideoIfReady();
+      break;
       
     case 'scene':
       startVideoIfReady();

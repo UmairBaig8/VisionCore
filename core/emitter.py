@@ -7,6 +7,9 @@ CLI mode uses no-op; API mode wires to WebSocket.
 class EventEmitter:
     """Base emitter — no-op. Override in API server."""
 
+    def on_detection(self, sport, video_type, location, league, teams):
+        pass
+
     def on_scene(self, timestamp, scene_type, activity, scene_raw):
         pass
 
