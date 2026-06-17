@@ -8,10 +8,12 @@ import io
 import json
 import shutil
 import threading
+import time
 import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -20,6 +22,18 @@ from core.orchestrator import VideoOrchestrator
 from core.paths import output_dir, videos_dir, project_root
 
 app = FastAPI(title="VidCore API", version="1.0")
+
+# CORS — allow browser dashboards
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# concurrency limit — prevent vLLM overload
+MAX_CONCURRENT_JOBS = 2
+job_semaphore = threading.BoundedSemaphore(MAX_CONCURRENT_JOBS)
 
 static_dir = output_dir()
 static_dir.mkdir(parents=True, exist_ok=True)
@@ -78,9 +92,9 @@ class WebSocketEmitter(EventEmitter):
 
 
 def _run_analysis(job_id, video_path, **kwargs):
+    job_semaphore.acquire()
     try:
         emitter = jobs[job_id].get("emitter")
-        # default to stream + live for API mode
         kwargs.setdefault("stream_mode", True)
         kwargs.setdefault("live", True)
         orchestrator = VideoOrchestrator(
@@ -103,6 +117,8 @@ def _run_analysis(job_id, video_path, **kwargs):
         jobs[job_id]["error"] = str(e)
         if jobs[job_id].get("emitter"):
             jobs[job_id]["emitter"].on_error(str(e))
+    finally:
+        job_semaphore.release()
 
 
 # ─── REST Endpoints ──────────────────────────────────────────────────────────
@@ -187,6 +203,13 @@ def start_analysis(video: str, depth: str = "fast", interval: float = 1.0):
         daemon=True,
     )
     thread.start()
+
+    # check if job is queued (semaphore blocked)
+    time.sleep(0.1)
+    if jobs[job_id]["status"] == "running":
+        pass  # started immediately
+    else:
+        jobs[job_id]["status"] = "queued"
 
     return {"job_id": job_id, "video": str(video_path),
             "ws_url": f"/ws/{job_id}"}
