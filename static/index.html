@@ -840,6 +840,45 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
+    /* ── CLASSIFICATION CARD ── */
+    .classify-card {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 48px 24px; text-align: center; animation: fadeIn .4s ease;
+    }
+    .classify-ring {
+      position: relative; width: 72px; height: 72px; margin-bottom: 20px;
+    }
+    .classify-spinner {
+      width: 72px; height: 72px; border: 3px solid var(--border);
+      border-top-color: var(--blue); border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .classify-icon {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      font-size: 24px; color: var(--blue);
+    }
+    .classify-title {
+      font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 6px;
+    }
+    .classify-sub {
+      font-size: 12px; color: var(--muted); margin-bottom: 20px;
+      transition: color .3s;
+    }
+    .classify-checks { display: flex; flex-direction: column; gap: 8px; }
+    .check-row {
+      display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted);
+      transition: all .3s;
+    }
+    .check-row.done { color: var(--green); }
+    .check-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: var(--border);
+      transition: background .3s, box-shadow .3s;
+    }
+    .check-row.done .check-dot {
+      background: var(--green); box-shadow: 0 0 8px var(--green);
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; }}
+
     /* ── AGENT TELEMETRY MONITOR ── */
     .agent-monitor-panel {
       display: flex;
@@ -1901,8 +1940,8 @@ function startVideoIfReady() {
   if (_videoStarted) return;
   const card = document.getElementById('classify-card');
   if (!card) return;
-  const sport = document.getElementById('sport-val').textContent;
-  if (sport === '--' || sport === 'unknown' || sport === 'Sport: --') return;
+  const done = document.querySelectorAll('.check-row.done').length;
+  if (done < 2) return;
   
   _videoStarted = true;
   const pw = document.getElementById('player-window');
@@ -1915,7 +1954,7 @@ function startVideoIfReady() {
 
 function markCheck(id, val) {
   const el = document.getElementById(id);
-  if (el) el.textContent = '✅ ' + val;
+  if (el) { el.classList.add('done'); el.querySelector('.check-dot').textContent = '✓'; }
 }
 
 // ── PLAY DETECT OVERLAYS & 9:16 CROP ──
@@ -1946,14 +1985,17 @@ async function startAnalysis() {
   // Show classification loading card (video hidden until detection complete)
   const pw = document.getElementById('player-window');
   if (pw) pw.innerHTML = `
-    <div class="classification-card" id="classify-card">
-      <div class="spinner"></div>
-      <div style="font-size:16px;font-weight:700;margin-top:12px">Analyzing Video</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px" id="classify-status">Classifying content...</div>
-      <div style="display:flex;gap:12px;margin-top:12px;font-size:11px" id="classify-checks">
-        <span id="check-sport">⬜ Sport</span>
-        <span id="check-location">⬜ Location</span>
-        <span id="check-type">⬜ Type</span>
+    <div class="classify-card" id="classify-card">
+      <div class="classify-ring">
+        <div class="classify-spinner"></div>
+        <div class="classify-icon">◉</div>
+      </div>
+      <div class="classify-title">Analyzing Video</div>
+      <div class="classify-sub" id="classify-status">Initializing AI pipeline...</div>
+      <div class="classify-checks" id="classify-checks">
+        <div class="check-row" id="check-sport"><span class="check-dot"></span>Sport Detection</div>
+        <div class="check-row" id="check-type"><span class="check-dot"></span>Content Type</div>
+        <div class="check-row" id="check-location"><span class="check-dot"></span>Location</div>
       </div>
     </div>
   `;

@@ -318,31 +318,36 @@ class VideoOrchestrator:
         client = VLLMClient(cfg["vllm_endpoint"], cfg["model"])
         timeline = Timeline()
 
-        # ── detection phase ──
-        if self.classify:
-            print("Classifying video type", end="", flush=True)
-            video_type = _classify_video(client, self.video_path,
-                                         max(self.sample_interval * 4, 2.0))
-            print(f" → {video_type['video_type']} ({video_type['confidence']:.0%})")
-        else:
-            video_type = {"video_type": "full_match", "confidence": 1.0}
+        # ── detection phase (parallel — 3x faster) ──
+        from concurrent.futures import ThreadPoolExecutor as TPE, as_completed as ac
 
-        if self.location:
-            geo = {"stadium": self.location, "source": "manual"}
-            print(f"Location: {self.location} (manual)")
-        else:
-            print("Detecting location", end="", flush=True)
-            geo = _detect_geo(client, self.video_path)
-            if geo:
-                print(f" → {geo.get('stadium', 'unknown')}, {geo.get('country', '')}")
-            else:
-                print(" → unknown")
-                geo = {}
+        def _run_classify():
+            if self.classify:
+                return _classify_video(client, self.video_path,
+                                       max(self.sample_interval * 4, 2.0))
+            return {"video_type": "full_match", "confidence": 1.0}
 
-        print("Detecting sport", end="", flush=True)
-        sport_info = _detect_sport(client, self.video_path)
+        def _run_geo():
+            if self.location:
+                return {"stadium": self.location, "source": "manual"}
+            return _detect_geo(client, self.video_path) or {}
+
+        def _run_sport():
+            return _detect_sport(client, self.video_path)
+
+        with TPE(max_workers=3) as pool:
+            f_cls = pool.submit(_run_classify)
+            f_geo = pool.submit(_run_geo)
+            f_spt = pool.submit(_run_sport)
+            video_type = f_cls.result()
+            geo = f_geo.result()
+            sport_info = f_spt.result()
+
+        vt = video_type["video_type"]
         sport_id = sport_info.get("sport", "generic")
-        print(f" → {sport_id} ({sport_info.get('confidence', 0):.0%})")
+        print(f" → {vt} ({video_type['confidence']:.0%}) | "
+              f"{geo.get('stadium', geo.get('city', '') or 'unknown')} | "
+              f"{sport_id} ({sport_info.get('confidence', 0):.0%})")
 
         # ── build context ──
         self.ctx = MatchContext(
@@ -502,7 +507,7 @@ class VideoOrchestrator:
                 for ev in key_events:
                     self.emitter.on_key_event(ev)
 
-            if self.stream_mode:
+            if self.stream_mode and self.verbose:
                 prefix = ""
                 if key_events:
                     prefix = " ".join(f"[{e['type']}]" for e in key_events)
