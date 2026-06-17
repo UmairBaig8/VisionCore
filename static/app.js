@@ -415,6 +415,14 @@ async function startAnalysis() {
   const job = await r.json();
   jobId = job.job_id;
 
+  // Load source video immediately
+  const pw = document.getElementById('player-window');
+  if (pw) pw.innerHTML = `
+    <video class="video-element" id="live-player" controls autoplay muted playsinline>
+      <source src="${API}/videos/${selectedVideoName}" type="video/mp4">
+    </video>
+  `;
+
   // Initialize Socket connection
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}${API}/ws/${jobId}`);
