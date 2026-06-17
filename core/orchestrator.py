@@ -521,7 +521,7 @@ class VideoOrchestrator:
                 if commentary_str:
                     print(f"  > {commentary_str[:250]}")
                 print()
-            elif not self.report_only:
+            elif not self.report_only and not self.stream_mode:
                 bar_len = 30
                 done = int(bar_len * processed / max(total_frames, 1))
                 bar = f"[{'#' * done}{'-' * (bar_len - done)}]"
