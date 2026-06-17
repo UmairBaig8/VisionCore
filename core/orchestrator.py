@@ -105,16 +105,21 @@ def _detect_sport(client, video_path):
     cap = open_video(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    off = min(total // 2, total - 1)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, off)
-    ret, frame = cap.read()
+    # try 30s in, 50% in, 70% in — send all frames in one call
+    offsets = [int(fps * 30), total // 2, int(total * 0.7)]
+    frames_b64 = []
+    for off in offsets:
+        off = min(off, total - 1)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, off)
+        ret, frame = cap.read()
+        if ret:
+            b64 = encode_frame(frame)
+            if b64:
+                frames_b64.append(b64)
     cap.release()
-    if not ret:
+    if not frames_b64:
         return {"sport": "generic", "confidence": 0.0}
-    b64 = encode_frame(frame)
-    if not b64:
-        return {"sport": "generic", "confidence": 0.0}
-    result = _ask_with_retry(client, sport_prompt, b64, label="sport")
+    result = _ask_with_retry(client, sport_prompt, frames_b64, label="sport")
     if result:
         parsed = _parse_json_safe(result)
         return {"sport": parsed.get("sport", "generic"), "confidence": 0.8}
@@ -149,19 +154,22 @@ def _classify_video(client, video_path, interval):
     cap = open_video(video_path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    # skip first 10s (intro graphics), sample middle frame
-    off = max(min(total // 2, total - 1), int(fps * 10))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, off)
-    ret, frame = cap.read()
+    # skip first 10s (intro graphics), sample 3 frames — send in one call
+    offsets = [max(int(fps * 10), 0), total // 2, int(total * 0.7)]
+    frames_b64 = []
+    for off in offsets:
+        off = min(off, total - 1)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, off)
+        ret, frame = cap.read()
+        if ret:
+            b64 = encode_frame(frame)
+            if b64:
+                frames_b64.append(b64)
     cap.release()
-    if not ret:
+    if not frames_b64:
         return {"video_type": "full_match", "confidence": 0.0,
-                "evidence": "no frame extracted"}
-    b64 = encode_frame(frame)
-    if not b64:
-        return {"video_type": "full_match", "confidence": 0.0,
-                "evidence": "encode failed"}
-    result = _ask_with_retry(client, classifier_prompt, b64, label="classify")
+                "evidence": "no frames extracted"}
+    result = _ask_with_retry(client, classifier_prompt, frames_b64, label="classify")
     if result:
         parsed = _parse_json_safe(result)
         return {"video_type": parsed.get("video_type", "full_match"),

@@ -11,12 +11,14 @@ class VLLMClient:
         content = []
 
         if image_b64:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{image_b64}"
-                }
-            })
+            images = image_b64 if isinstance(image_b64, list) else [image_b64]
+            for img in images:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{img}"
+                    }
+                })
 
         content.append({
             "type": "text",
