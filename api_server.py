@@ -74,8 +74,11 @@ class WebSocketEmitter(EventEmitter):
                      "scene_type": scene_type, "activity": activity})
 
     def on_key_event(self, event):
+        et = event.get("type", "")
+        if et == "GOAL_ATTEMPT":
+            return
         self._send({"type": "key_event",
-                     "event_type": event.get("type", ""),
+                     "event_type": et,
                      "timestamp": event.get("timestamp", ""),
                      "team": event.get("team", ""),
                      "player": event.get("player", ""),
@@ -301,6 +304,8 @@ async def sse_stream(job_id: str):
                 current = len(ctx.key_events)
                 if current > last_events:
                     for ev in ctx.key_events[last_events:]:
+                        if ev.get("type") == "GOAL_ATTEMPT":
+                            continue
                         yield f"data: {json.dumps({'type':'key_event','event_type':ev.get('type',''),'timestamp':ev.get('timestamp',''),'team':ev.get('team',''),'player':ev.get('player',''),'description':ev.get('global_time','')})}\n\n"
                     last_events = current
 
