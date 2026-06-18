@@ -22,6 +22,15 @@ from core.emitter import EventEmitter
 from core.orchestrator import VideoOrchestrator
 from core.paths import output_dir, videos_dir, project_root
 
+# configure logging for all VidCore modules
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)-5s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+for name in ("orchestrator", "vllm", "router", "context", "api"):
+    logging.getLogger(name).setLevel(logging.DEBUG)
+
 logger = logging.getLogger("api")
 
 app = FastAPI(title="VidCore API", version="1.0")
