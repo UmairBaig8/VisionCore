@@ -1055,15 +1055,105 @@
     }
 
     .report-document {
-      background: rgba(0, 0, 0, 0.2);
+      background: linear-gradient(180deg, rgba(16, 26, 48, 0.6), rgba(10, 16, 36, 0.4));
       border: 1px solid var(--card-border);
-      border-radius: var(--radius-md);
-      padding: 24px;
+      border-radius: var(--radius-lg);
+      padding: 32px;
       max-height: 600px;
       overflow-y: auto;
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.8;
       color: var(--text-secondary);
+      letter-spacing: 0.01em;
+    }
+
+    .report-h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin: 0 0 16px 0;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--accent-blue);
+      letter-spacing: -0.5px;
+    }
+
+    .report-h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 24px 0 10px 0;
+      padding-left: 10px;
+      border-left: 3px solid var(--accent-emerald);
+    }
+
+    .report-h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-blue);
+      margin: 16px 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .report-p {
+      margin-bottom: 12px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .report-list {
+      list-style: none;
+      padding: 0;
+      margin: 12px 0;
+    }
+
+    .report-list li {
+      padding: 8px 12px 8px 28px;
+      position: relative;
+      background: rgba(255,255,255,0.02);
+      border-radius: var(--radius-sm);
+      margin-bottom: 4px;
+      font-size: 13px;
+      border: 1px solid transparent;
+      transition: var(--transition);
+    }
+
+    .report-list li:hover {
+      background: rgba(255,255,255,0.04);
+      border-color: var(--card-border);
+    }
+
+    .report-list li::before {
+      content: '▸';
+      position: absolute;
+      left: 10px;
+      color: var(--accent-blue);
+      font-weight: bold;
+    }
+
+    .report-hr {
+      border: none;
+      border-top: 1px solid var(--card-border);
+      margin: 20px 0;
+    }
+
+    .report-document strong {
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    .report-document em {
+      color: var(--accent-amber);
+      font-style: italic;
+    }
+
+    .report-document code {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--accent-blue);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
     }
 
     .report-document h1, .report-document h2, .report-document h3 {
@@ -2564,14 +2654,30 @@ async function onProcessingComplete(data) {
   // Load Report Markdown
   try {
     const reportText = await fetch(`${API}/report/${jobId}`).then(r => r.text());
-    let formattedText = reportText
-      .replace(/# (.*)/g, '<h1>$1</h1>')
-      .replace(/## (.*)/g, '<h2>$1</h2>')
-      .replace(/### (.*)/g, '<h3>$1</h3>')
-      .replace(/- \*\*(.*?)\*\*/g, '<li><strong>$1</strong>')
-      .replace(/\n\n/g, '<p>')
-      .replace(/---\n/g, '<hr>');
-    document.getElementById('report-content').innerHTML = formattedText;
+    let html = reportText
+      // headers
+      .replace(/^### (.+)$/gm, '<h3 class="report-h3">$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2 class="report-h2">$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1 class="report-h1">$1</h1>')
+      // bold + italic
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      // list items
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, '<ul class="report-list">$&</ul>')
+      // horizontal rule
+      .replace(/^---$/gm, '<hr class="report-hr">')
+      // paragraphs (double newlines)
+      .replace(/\n\n+/g, '</p><p class="report-p">')
+      // wrap in container
+      .replace(/^(?!<[hul])/, '<p class="report-p">');
+    
+    // ensure proper closing
+    if (!html.endsWith('</p>')) html += '</p>';
+    // cleanup empty paragraphs
+    html = html.replace(/<p class="report-p"><\/p>/g, '');
+    
+    document.getElementById('report-content').innerHTML = html;
   } catch(e) {
     document.getElementById('report-content').innerHTML = '<div class="empty-state">Match summary report unavailable</div>';
   }
