@@ -450,7 +450,7 @@ class VideoOrchestrator:
                     sb_parsed = _parse_json_safe(sb_result)
                     sb_score = sb_parsed.get("score", "")
                     sb_conf = sb_parsed.get("confidence", 0)
-                    if sb_score and sb_score != "NO_SCOREBOARD" and sb_conf >= 0.7:
+                    if sb_score and sb_score != "NO_SCOREBOARD" and sb_conf >= 0.5:
                         try:
                             parts = sb_score.strip().split("-")
                             if len(parts) == 2:
@@ -459,8 +459,15 @@ class VideoOrchestrator:
                                 sb_history.append((sh, sa, sb_conf))
                                 if len(sb_history) > 6:
                                     sb_history.pop(0)
-                                min_conf = 0.7 if jump <= 1 else 0.90
+                                # be more lenient: only require consensus for multi-goal jumps
+                                min_conf = 0.50 if jump <= 1 else 0.85
                                 required_consensus = 1 if jump <= 1 else 2
+                                # if current score is 0-0, accept any positive score immediately
+                                if sh == 0 and sa == 0:
+                                    continue
+                                if self.ctx.home_score == 0 and self.ctx.away_score == 0:
+                                    required_consensus = 1
+                                    min_conf = 0.50
                                 consistent = sum(1 for hs, a_, _ in sb_history[-required_consensus:]
                                                 if (hs, a_) == (sh, sa))
                                 if sb_conf >= min_conf and consistent >= required_consensus:
@@ -537,6 +544,23 @@ class VideoOrchestrator:
                         self.ctx.update_phase(parsed["phase"])
                     # split: significant events trigger reasoning/commentary/reels
                     sig_events = [e for e in key_events if e.get("type") != "GOAL_ATTEMPT"]
+                    # score fallback: if scoreboard hasn't updated in last 20 frames,
+                    # increment score from GOAL events regardless
+                    for ev in sig_events:
+                        if ev.get("type") == "GOAL" and self.ctx.last_score_change != "scoreboard":
+                            side = ev.get("team", "home")
+                            if "away" in side.lower():
+                                if self.ctx.away_score >= 0:
+                                    self.ctx.away_score += 1
+                                    self.ctx.last_score_change = "event_goal"
+                                    self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
+                                    logger.debug("  score fallback: away goal → %s", self.ctx.score_string())
+                            else:
+                                if self.ctx.home_score >= 0:
+                                    self.ctx.home_score += 1
+                                    self.ctx.last_score_change = "event_goal"
+                                    self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
+                                    logger.debug("  score fallback: home goal → %s", self.ctx.score_string())
 
             t_analysis = 0.0
             if do_analysis and sig_events:

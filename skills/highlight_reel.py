@@ -47,8 +47,8 @@ def _check_ffmpeg():
 def _extract_clip_ffmpeg(video_path, start_sec, duration, out_path, crop_vertical=False):
     vf = ""
     if crop_vertical:
-        # crop center 9:16 from 16:9 source
-        vf = "crop=ih*9/16:ih,scale=1080:1920"
+        # crop center 9:16 from source — use 60% width to capture more frame
+        vf = "crop=iw*0.60:ih,scale=1080:1920"
 
     args = [
         "ffmpeg", "-y", "-loglevel", "error",
