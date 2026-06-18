@@ -545,16 +545,7 @@ class VideoOrchestrator:
 
             parallel_tasks = {"scene": (scene_prompt + yolo_hint, image_b64)}
 
-            # event detection: run in parallel only if YOLO doesn't suggest skipping
-            if do_event and event_prompt:
-                skip_event = self.ctx.consecutive_generic_frames >= 3 and (
-                    not yolo or yolo.get("ball_zone") in ("midfield", "far_end", "not_visible"))
-                if not skip_event:
-                    ev_hint = yolo_hint if yolo else ""
-                    parallel_tasks["event"] = (
-                        f"{event_prompt}\n\nAnalyze this frame for key events. Reply with JSON only.{ev_hint}",
-                        image_b64)
-
+            # event detection: runs AFTER scene (needs scene_desc for accuracy)
             # scoreboard: every 5th frame, full frame (no crop — VLM finds it anywhere)
             sb_applied = False
             if scoreboard_prompt and processed % 5 == 0:
@@ -611,112 +602,6 @@ class VideoOrchestrator:
                     except (ValueError, IndexError):
                         pass
 
-            # process event detection result (ran in parallel with scene)
-            event_str = parallel_results.get("event")
-            t_event = 0.0
-            key_events = []
-            if event_str and sport_events_prompt:
-                self._emit_agent("event")
-                parsed = _parse_json_safe(event_str)
-                events = parsed.get("events", [])
-                for e in events:
-                    e["timestamp"] = f"{timestamp:.1f}s"
-                # dedup events from same frame: keep only one per event type
-                seen_types = set()
-                deduped = []
-                for e in events:
-                    et = e.get("type", "")
-                    if et not in seen_types:
-                        seen_types.add(et)
-                        deduped.append(e)
-                events = deduped
-                key_events = router.process_event(events)
-                # dedup: merge GOAL_ATTEMPT + GOAL within 4s
-                ctx_evs = self.ctx.key_events
-                if len(ctx_evs) >= 2:
-                    prev = ctx_evs[-1]
-                    curr = key_events[0] if key_events else None
-                    if curr and prev.get("type") == "GOAL_ATTEMPT" and curr.get("type") == "GOAL":
-                        try:
-                            pt = float(prev.get("timestamp", "0").replace("s", ""))
-                            ct = float(curr.get("timestamp", "0").replace("s", ""))
-                            if ct - pt < 4.0:
-                                ctx_evs[-1] = curr
-                                ctx_evs[-1]["timestamp"] = prev["timestamp"]
-                                key_events = []
-                        except (ValueError, TypeError):
-                            pass
-                # dedup: remove any event whose type+timestamp already exists in ctx history
-                recent_window = 8.0
-                try:
-                    current_ts = float(timestamp)
-                except (ValueError, TypeError):
-                    current_ts = 0.0
-                for ev in list(key_events):
-                    et = ev.get("type", "")
-                    if et == "GOAL_ATTEMPT":
-                        continue
-                    for past in reversed(ctx_evs):
-                        if past.get("type") == et:
-                            try:
-                                pt = float(past.get("timestamp", "0").replace("s", ""))
-                                if abs(current_ts - pt) < recent_window:
-                                    key_events.remove(ev)
-                                    logger.debug("  dedup: skipped %s at %.1fs (existing at %.1fs)",
-                                                 et, current_ts, pt)
-                                    break
-                            except (ValueError, TypeError):
-                                pass
-                # update momentum from event data
-                if "possession_home" in parsed:
-                    self.ctx.update_momentum(int(parsed["possession_home"]))
-                if "phase" in parsed:
-                    self.ctx.update_phase(parsed["phase"])
-                # split: significant events trigger reasoning/commentary/reels
-                sig_events = [e for e in key_events if e.get("type") != "GOAL_ATTEMPT"]
-                # GOAL validation gate: require multiple confirming signals
-                goal_confirm = ["celebration", "celebrating", "arms raised",
-                                "sliding on knees", "fist pump", "hugging",
-                                "players running", "crowd", "jumping"]
-                goal_miss = ["missed", "wide", "over the bar", "saved",
-                             "blocked", "cleared", "deflected", "goalkeeper saves",
-                             "hands on head", "disappointed", "nearly", "almost",
-                             "outside the box", "side netting"]
-                confirm_count = sum(1 for kw in goal_confirm if kw in scene_desc.lower())
-                miss_count = sum(1 for kw in goal_miss if kw in scene_desc.lower())
-                has_goal_context = confirm_count >= 2 and miss_count == 0
-                validated_goals = []
-                for ev in sig_events:
-                    if ev.get("type") == "GOAL":
-                        yolo_ok = yolo and yolo.get("has_goal_activity", True)
-                        if has_goal_context and yolo_ok:
-                            # cross-frame confirmation: require 2 frames within 8s
-                            goal_key = f"{ev.get('team','?')}_{ev.get('player','?')}"
-                            if goal_key in pending_goals:
-                                pending_goals[goal_key]["count"] += 1
-                                if pending_goals[goal_key]["count"] >= 2:
-                                    validated_goals.append(ev)
-                                    del pending_goals[goal_key]
-                                    logger.info("  GOAL confirmed: %s (2 frames)", goal_key)
-                            else:
-                                pending_goals[goal_key] = {"event": ev, "first_ts": timestamp, "count": 1}
-                                logger.debug("  GOAL pending: %s (need 2nd frame)", goal_key)
-                                # emit as GOAL_ATTEMPT until confirmed
-                                ev = dict(ev, type="GOAL_ATTEMPT")
-                                validated_goals.append(ev)
-                        else:
-                            reason = "no scene confirmation" if not has_goal_context else "YOLO: ball not in box"
-                            ev = dict(ev, type="GOAL_ATTEMPT")
-                            logger.debug("  downgraded GOAL → GOAL_ATTEMPT (%s)", reason)
-                            validated_goals.append(ev)
-                    else:
-                        validated_goals.append(ev)
-                # expire stale pending goals (>10s old)
-                for gk in list(pending_goals.keys()):
-                    if timestamp - pending_goals[gk]["first_ts"] > 10.0:
-                        del pending_goals[gk]
-                sig_events = validated_goals
-
             # extract score + phase from scene description
             old_score = self.ctx.score_string()
             old_phase = self.ctx.phase
@@ -724,13 +609,118 @@ class VideoOrchestrator:
             if self.ctx.score_string() != old_score:
                 self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
 
-            # router check (YOLO cross-check already handled by parallel event call)
-            route = router.route(scene_desc, processed)
-            if self.verbose:
+            # step 2: event detection (sequential — needs scene_desc for accuracy)
+            key_events = []
+            t_event = 0.0
+            if do_event and event_prompt:
+                route = router.route(scene_desc, processed)
+                skip_event = (route["reason"].startswith("skip:") and not (
+                    yolo and yolo.get("has_goal_activity")))
+                if not skip_event:
+                    t0 = time.time()
+                    yolo_ctx = f"\n[YOLO: {yolo['ball_zone']}]" if yolo else ""
+                    event_str = _ask_with_retry(
+                        client, f"{event_prompt}\n\nFrame: {scene_desc}{yolo_ctx}",
+                        label="event")
+                    t_event = time.time() - t0
+                    self._emit_agent("event")
+                    if event_str and sport_events_prompt:
+                        parsed = _parse_json_safe(event_str)
+                        events = parsed.get("events", [])
+                        for e in events:
+                            e["timestamp"] = f"{timestamp:.1f}s"
+                        seen_types = set()
+                        deduped = []
+                        for e in events:
+                            et = e.get("type", "")
+                            if et not in seen_types:
+                                seen_types.add(et)
+                                deduped.append(e)
+                        key_events = router.process_event(deduped)
+                        # dedup within ctx history
+                        ctx_evs = self.ctx.key_events
+                        if len(ctx_evs) >= 2:
+                            prev = ctx_evs[-1]
+                            curr = key_events[0] if key_events else None
+                            if curr and prev.get("type") == "GOAL_ATTEMPT" and curr.get("type") == "GOAL":
+                                try:
+                                    pt = float(prev.get("timestamp", "0").replace("s", ""))
+                                    ct = float(curr.get("timestamp", "0").replace("s", ""))
+                                    if ct - pt < 4.0:
+                                        ctx_evs[-1] = curr
+                                        ctx_evs[-1]["timestamp"] = prev["timestamp"]
+                                        key_events = []
+                                except (ValueError, TypeError):
+                                    pass
+                        # dedup same-type events within 8s
+                        recent_window = 8.0
+                        try:
+                            current_ts = float(timestamp)
+                        except (ValueError, TypeError):
+                            current_ts = 0.0
+                        for ev in list(key_events):
+                            et = ev.get("type", "")
+                            if et == "GOAL_ATTEMPT":
+                                continue
+                            for past in reversed(ctx_evs):
+                                if past.get("type") == et:
+                                    try:
+                                        pt = float(past.get("timestamp", "0").replace("s", ""))
+                                        if abs(current_ts - pt) < recent_window:
+                                            key_events.remove(ev)
+                                            break
+                                    except (ValueError, TypeError):
+                                        pass
+                        if "possession_home" in parsed:
+                            self.ctx.update_momentum(int(parsed["possession_home"]))
+                        if "phase" in parsed:
+                            self.ctx.update_phase(parsed["phase"])
+                        # GOAL validation + cross-frame confirmation
+                        sig_events = [e for e in key_events if e.get("type") != "GOAL_ATTEMPT"]
+                        goal_confirm = ["celebration", "celebrating", "arms raised",
+                                        "sliding on knees", "fist pump", "hugging",
+                                        "players running", "crowd", "jumping"]
+                        goal_miss = ["missed", "wide", "over the bar", "saved",
+                                     "blocked", "cleared", "deflected", "goalkeeper saves",
+                                     "hands on head", "disappointed", "nearly", "almost",
+                                     "outside the box", "side netting"]
+                        has_goal_context = (sum(1 for kw in goal_confirm if kw in scene_desc.lower()) >= 2
+                                            and sum(1 for kw in goal_miss if kw in scene_desc.lower()) == 0)
+                        validated = []
+                        for ev in sig_events:
+                            if ev.get("type") == "GOAL":
+                                yolo_ok = yolo and yolo.get("has_goal_activity", True)
+                                if has_goal_context and yolo_ok:
+                                    gk = f"{ev.get('team','?')}_{ev.get('player','?')}"
+                                    if gk in pending_goals:
+                                        pending_goals[gk]["count"] += 1
+                                        if pending_goals[gk]["count"] >= 2:
+                                            validated.append(ev)
+                                            del pending_goals[gk]
+                                            logger.info("  GOAL confirmed: %s (2 frames)", gk)
+                                        else:
+                                            ev = dict(ev, type="GOAL_ATTEMPT")
+                                            validated.append(ev)
+                                    else:
+                                        pending_goals[gk] = {"event": ev, "first_ts": timestamp, "count": 1}
+                                        ev = dict(ev, type="GOAL_ATTEMPT")
+                                        validated.append(ev)
+                                else:
+                                    ev = dict(ev, type="GOAL_ATTEMPT")
+                                    validated.append(ev)
+                            else:
+                                validated.append(ev)
+                        sig_events = validated
+                        for gk in list(pending_goals.keys()):
+                            try:
+                                if timestamp - pending_goals[gk]["first_ts"] > 10.0:
+                                    del pending_goals[gk]
+                            except (TypeError, KeyError):
+                                pass
+
+            if self.verbose and route:
                 self._vprint(f"frame={processed} phase={self.ctx.phase} "
-                             f"reasoning={route['reasoning']} "
-                             f"commentary={route['commentary']} "
-                             f"({route['reason']})")
+                             f"({route.get('reason','?')})")
 
             t_analysis = 0.0
             if do_analysis and sig_events:
