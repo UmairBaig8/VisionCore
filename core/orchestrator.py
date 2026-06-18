@@ -547,12 +547,24 @@ class VideoOrchestrator:
             parallel_tasks = {"scene": (scene_prompt + yolo_hint, image_b64)}
 
             # event detection: runs AFTER scene (needs scene_desc for accuracy)
-            # scoreboard: every 5th frame, full frame (no crop — VLM finds it anywhere)
+            # scoreboard: every 5th frame — rotating region + full frame fallback
             sb_applied = False
+            sb_b64 = None
             if scoreboard_prompt and processed % 5 == 0:
-                sb_b64 = image_b64  # reuse already-encoded full frame
-                if sb_b64:
-                    parallel_tasks["scoreboard"] = (scoreboard_prompt, sb_b64)
+                fh, fw = frame.shape[:2]
+                crops = [
+                    frame[0:int(fh * 0.15), :],                  # top bar
+                    frame[int(fh * 0.85):fh, :],                  # bottom bar
+                ]
+                crop_idx = (processed // 5) % len(crops)
+                crop = crops[crop_idx]
+                if crop.size > 0:
+                    sb_b64 = encode_frame(crop)
+                # every 15th frame: try full frame as fallback for tricky scoreboards
+                if processed % 15 == 0:
+                    sb_b64 = image_b64
+            if sb_b64:
+                parallel_tasks["scoreboard"] = (scoreboard_prompt, sb_b64)
 
             t_parallel = time.time()
             parallel_results = self._run_parallel(client, parallel_tasks)
@@ -696,7 +708,7 @@ class VideoOrchestrator:
                         validated = []
                         for ev in sig_events:
                             if ev.get("type") == "GOAL":
-                                yolo_ok = yolo and yolo.get("has_goal_activity", True)
+                                yolo_ok = (yolo is None) or yolo.get("has_goal_activity", True)
                                 if has_goal_context and yolo_ok:
                                         gk = f"{ev.get('team','?')}_{ev.get('player','?')}"
                                         if gk in pending_goals:
