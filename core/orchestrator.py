@@ -425,6 +425,8 @@ class VideoOrchestrator:
 
         t_detect = time.time()
         logger.info("detection phase starting (classify+geo+sport in parallel)")
+        # pre-load YOLO in background so first frame doesn't pay 36s cost
+        ThreadPoolExecutor(max_workers=1).submit(_get_yolo)
         with TPE(max_workers=3) as pool:
             f_cls = pool.submit(_run_classify)
             f_geo = pool.submit(_run_geo)
@@ -513,6 +515,9 @@ class VideoOrchestrator:
         # scoreboard history buffer: only accept new score after 2 consistent readings
         sb_history = []
 
+        # force scoreboard read on next frame after a GOAL
+        force_scoreboard_next = False
+
         # goal confirmation buffer: require 2 frames within 8s to confirm a GOAL
         pending_goals = {}  # {goal_hash: {"event": ev, "first_ts": ts, "count": n}}
 
@@ -547,21 +552,22 @@ class VideoOrchestrator:
             parallel_tasks = {"scene": (scene_prompt + yolo_hint, image_b64)}
 
             # event detection: runs AFTER scene (needs scene_desc for accuracy)
-            # scoreboard: every 5th frame — rotating region + full frame fallback
+            # scoreboard: every 3rd frame — rotating region + full frame fallback
             sb_applied = False
             sb_b64 = None
-            if scoreboard_prompt and processed % 5 == 0:
+            if scoreboard_prompt and (processed % 3 == 0 or force_scoreboard_next):
+                force_scoreboard_next = False
                 fh, fw = frame.shape[:2]
                 crops = [
                     frame[0:int(fh * 0.15), :],                  # top bar
                     frame[int(fh * 0.85):fh, :],                  # bottom bar
                 ]
-                crop_idx = (processed // 5) % len(crops)
+                crop_idx = (processed // 3) % len(crops)
                 crop = crops[crop_idx]
                 if crop.size > 0:
                     sb_b64 = encode_frame(crop)
-                # every 15th frame: try full frame as fallback for tricky scoreboards
-                if processed % 15 == 0:
+                # every 9th frame: try full frame for tricky scoreboards
+                if processed % 9 == 0:
                     sb_b64 = image_b64
             if sb_b64:
                 parallel_tasks["scoreboard"] = (scoreboard_prompt, sb_b64)
@@ -702,8 +708,9 @@ class VideoOrchestrator:
                                         "players running", "crowd", "jumping"]
                         goal_miss = ["missed", "wide", "over the bar", "saved",
                                      "blocked", "cleared", "deflected", "goalkeeper saves",
-                                     "hands on head", "disappointed", "nearly", "almost",
-                                     "outside the box", "side netting"]
+                                     "hands on head", "nearly", "almost",
+                                     "outside the box", "side netting", "just wide",
+                                     "off the post", "crossbar"]
                         has_goal_context = (sum(1 for kw in goal_confirm if kw in scene_desc.lower()) >= 2
                                             and sum(1 for kw in goal_miss if kw in scene_desc.lower()) == 0)
                         validated = []
@@ -728,6 +735,18 @@ class VideoOrchestrator:
                             else:
                                 validated.append(ev)
                         sig_events = validated
+                        # Update score from confirmed GOALs (scoreboard may lag behind broadcast)
+                        for ev in sig_events:
+                            if ev.get("type") == "GOAL":
+                                side = ev.get("team", "home")
+                                if "away" in side.lower():
+                                    self.ctx.away_score += 1
+                                else:
+                                    self.ctx.home_score += 1
+                                self.ctx.last_score_change = f"goal_{ev.get('timestamp','?')}"
+                                self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
+                                logger.info("  score updated from GOAL → %s", self.ctx.score_string())
+                                force_scoreboard_next = True  # verify against scoreboard ASAP
                         for gk in list(pending_goals.keys()):
                             try:
                                 if timestamp - pending_goals[gk]["first_ts"] > 10.0:
