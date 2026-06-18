@@ -651,6 +651,8 @@
       border-radius: 3px;
       letter-spacing: 0.5px;
       pointer-events: auto;
+      cursor: default;
+      user-select: none;
     }
 
     .crop-pillar-left .crop-label-tag { right: 10px; }
@@ -1320,11 +1322,11 @@
                 <!-- 9:16 vertical crop guide overlay -->
                 <div class="crop-overlay-916" id="crop-overlay">
                   <div class="crop-pillar crop-pillar-left">
-                    <span class="crop-label-tag">Cut Pillar</span>
+                    <span class="crop-label-tag">◀ Crop</span>
                   </div>
                   <div></div> <!-- Clear middle -->
                   <div class="crop-pillar crop-pillar-right">
-                    <span class="crop-label-tag">Cut Pillar</span>
+                    <span class="crop-label-tag">Crop ▶</span>
                   </div>
                 </div>
               </div>
@@ -2181,9 +2183,9 @@ function resetDashboardUI() {
       <span id="player-placeholder-msg">Spinning up neural engine...</span>
     </div>
     <div class="crop-overlay-916" id="crop-overlay">
-      <div class="crop-pillar crop-pillar-left"><span class="crop-label-tag">Cut Pillar</span></div>
+      <div class="crop-pillar crop-pillar-left"><span class="crop-label-tag">◀ Crop</span></div>
       <div></div>
-      <div class="crop-pillar crop-pillar-right"><span class="crop-label-tag">Cut Pillar</span></div>
+      <div class="crop-pillar crop-pillar-right"><span class="crop-label-tag">Crop ▶</span></div>
     </div>
   `;
   const overlay = document.getElementById('crop-overlay');
@@ -2656,9 +2658,9 @@ function loadStudioReel(flavor, btnElement) {
       <source src="${reelSource}" type="video/mp4">
     </video>
     <div class="crop-overlay-916" id="studio-crop-overlay">
-      <div class="crop-pillar crop-pillar-left"><span class="crop-label-tag">Cut Pillar</span></div>
+      <div class="crop-pillar crop-pillar-left"><span class="crop-label-tag">◀ Crop</span></div>
       <div></div>
-      <div class="crop-pillar crop-pillar-right"><span class="crop-label-tag">Cut Pillar</span></div>
+      <div class="crop-pillar crop-pillar-right"><span class="crop-label-tag">Crop ▶</span></div>
     </div>
   `;
   
