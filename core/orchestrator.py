@@ -477,6 +477,9 @@ class VideoOrchestrator:
         processed = 0
         video_stem = Path(self.video_path).stem
 
+        # emit initial progress so UI doesn't look frozen during first VLM calls
+        self.emitter.on_progress(0, total_frames, 0)
+
         # live mode: progress is wall-clock, not frame count
         video_duration = None
         if self.live:
@@ -505,12 +508,15 @@ class VideoOrchestrator:
             if image_b64 is None:
                 continue
 
-            # step 0: YOLO analysis (fast, runs on every frame)
-            t_yolo = time.time()
-            yolo = _analyze_frame_yolo(frame)
-            t_yolo = time.time() - t_yolo
-            if yolo:
-                self.emitter.on_yolo_frame(yolo["ball_zone"], yolo["player_count"], yolo["phase_hint"])
+            # step 0: YOLO analysis (fast, every 3rd frame to avoid overhead)
+            t_yolo = 0.0
+            yolo = None
+            if processed % 3 == 1:
+                t_yolo = time.time()
+                yolo = _analyze_frame_yolo(frame)
+                t_yolo = time.time() - t_yolo
+                if yolo:
+                    self.emitter.on_yolo_frame(yolo["ball_zone"], yolo["player_count"], yolo["phase_hint"])
 
             # step 1: scene detection (always — inject YOLO data)
             t_scene = time.time()
@@ -525,67 +531,56 @@ class VideoOrchestrator:
             if scene_desc is None:
                 continue
 
-            # step 1b: scoreboard reading (every 5th frame, adaptive crop)
+            # step 1b: scoreboard reading (every 5th frame, 1 region per frame)
             sb_applied = False
             if scoreboard_prompt and processed % 5 == 0:
                 fh, fw = frame.shape[:2]
-                # try multiple crop regions for different scoreboard positions
                 crop_regions = [
-                    ("top", frame[0:int(fh * 0.18), :]),                      # top bar
-                    ("top-left", frame[0:int(fh * 0.22), 0:int(fw * 0.35)]),   # top-left corner
-                    ("top-right", frame[0:int(fh * 0.22), int(fw * 0.65):]),   # top-right corner
-                    ("bottom", frame[int(fh * 0.82):, :]),                      # bottom bar
+                    ("top", frame[0:int(fh * 0.18), :]),
+                    ("bottom", frame[int(fh * 0.82):, :]),
                 ]
-                for region_name, crop in crop_regions:
-                    if crop.size == 0:
-                        continue
+                # rotate through regions based on frame count to cover all positions
+                region_idx = (processed // 5) % len(crop_regions)
+                region_name, crop = crop_regions[region_idx]
+                if crop.size > 0:
                     sb_b64 = encode_frame(crop)
-                    if not sb_b64:
-                        continue
-                    sb_result = _ask_with_retry(client, scoreboard_prompt, sb_b64,
-                                                label=f"scoreboard_{region_name}")
-                    self._emit_agent("scoreboard")
-                    if not sb_result:
-                        continue
-                    sb_parsed = _parse_json_safe(sb_result)
-                    sb_score = sb_parsed.get("score", "")
-                    sb_conf = sb_parsed.get("confidence", 0)
-                    if sb_score and sb_score != "NO_SCOREBOARD" and sb_conf >= 0.5:
-                        try:
-                            parts = sb_score.strip().split("-")
-                            if len(parts) == 2:
-                                sh, sa = int(parts[0].strip()), int(parts[1].strip())
-                                jump = (sh - self.ctx.home_score) + (sa - self.ctx.away_score)
-                                sb_history.append((sh, sa, sb_conf))
-                                if len(sb_history) > 6:
-                                    sb_history.pop(0)
-                                # be more lenient: only require consensus for multi-goal jumps
-                                min_conf = 0.50 if jump <= 1 else 0.85
-                                required_consensus = 1 if jump <= 1 else 2
-                                # if current score is 0-0, accept any positive score immediately
-                                if sh == 0 and sa == 0:
-                                    continue
-                                if self.ctx.home_score == 0 and self.ctx.away_score == 0:
-                                    required_consensus = 1
-                                    min_conf = 0.50
-                                consistent = sum(1 for hs, a_, _ in sb_history[-required_consensus:]
-                                                if (hs, a_) == (sh, sa))
-                                if sb_conf >= min_conf and consistent >= required_consensus:
-                                    if sh >= self.ctx.home_score and sa >= self.ctx.away_score:
-                                        if (sh, sa) != (self.ctx.home_score, self.ctx.away_score):
-                                            self.ctx.home_score = sh
-                                            self.ctx.away_score = sa
-                                            self.ctx.last_score_change = "scoreboard"
-                                            self.emitter.on_score_change(sh, sa)
-                                            sb_applied = True
-                                            logger.debug("  scoreboard[%s] read %d-%d (conf=%.2f cons=%d)",
-                                                         region_name, sh, sa, sb_conf, consistent)
-                                else:
-                                    logger.debug("  scoreboard[%s] rejected %d-%d: jump=%d conf=%.2f",
-                                                 region_name, sh, sa, jump, sb_conf)
-                                break  # found score in this region
-                        except (ValueError, IndexError):
-                            pass
+                    if sb_b64:
+                        sb_result = _ask_with_retry(client, scoreboard_prompt, sb_b64,
+                                                    label=f"sb_{region_name}")
+                        self._emit_agent("scoreboard")
+                        if sb_result:
+                            sb_parsed = _parse_json_safe(sb_result)
+                            sb_score = sb_parsed.get("score", "")
+                            sb_conf = sb_parsed.get("confidence", 0)
+                            if sb_score and sb_score != "NO_SCOREBOARD" and sb_conf >= 0.5:
+                                try:
+                                    parts = sb_score.strip().split("-")
+                                    if len(parts) == 2:
+                                        sh, sa = int(parts[0].strip()), int(parts[1].strip())
+                                        jump = (sh - self.ctx.home_score) + (sa - self.ctx.away_score)
+                                        sb_history.append((sh, sa, sb_conf))
+                                        if len(sb_history) > 6:
+                                            sb_history.pop(0)
+                                        min_conf = 0.50 if jump <= 1 else 0.85
+                                        required_consensus = 1 if jump <= 1 else 2
+                                        if sh == 0 and sa == 0:
+                                            continue
+                                        if self.ctx.home_score == 0 and self.ctx.away_score == 0:
+                                            required_consensus = 1
+                                            min_conf = 0.50
+                                        consistent = sum(1 for hs, a_, _ in sb_history[-required_consensus:]
+                                                        if (hs, a_) == (sh, sa))
+                                        if sb_conf >= min_conf and consistent >= required_consensus:
+                                            if sh >= self.ctx.home_score and sa >= self.ctx.away_score:
+                                                if (sh, sa) != (self.ctx.home_score, self.ctx.away_score):
+                                                    self.ctx.home_score = sh
+                                                    self.ctx.away_score = sa
+                                                    self.ctx.last_score_change = "scoreboard"
+                                                    self.emitter.on_score_change(sh, sa)
+                                                    sb_applied = True
+                                                    logger.debug("  scoreboard[%s] %d-%d", region_name, sh, sa)
+                                except (ValueError, IndexError):
+                                    pass
 
             # extract score + phase from scene description (fallback — skip score if scoreboard read this frame)
             old_score = self.ctx.score_string()
