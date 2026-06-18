@@ -61,8 +61,8 @@ def videos():
 def analyze(
     video: str,
     interval: float = typer.Option(
-        0.5, "--interval", "-i",
-        help="Frame sampling interval in seconds"
+        0.3, "--interval", "-i",
+        help="Frame sampling interval in seconds (lower = more frames = better accuracy)"
     ),
     depth: str = typer.Option(
         "full", "--depth", "-d",

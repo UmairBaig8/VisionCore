@@ -2,4 +2,4 @@ vllm_endpoint: http://localhost:8000/v1/chat/completions
 
 model: Qwen/Qwen3-VL-32B-Instruct
 
-sample_interval: 0.5
+sample_interval: 0.3
