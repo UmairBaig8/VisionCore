@@ -532,7 +532,11 @@ class VideoOrchestrator:
             # ── immediate clip generation for live reel ──
             if live_reel and key_events:
                 for ev in key_events:
-                    live_reel.add_event(ev)
+                    clip = live_reel.add_event(ev)
+                    if clip:
+                        self.emitter.on_clip_generated(
+                            clip["event_type"], f"{clip['timestamp']}s",
+                            clip["path"], len(live_reel.clips))
 
             # emit phase change if it happened this frame
             if self.ctx.phase != old_phase:

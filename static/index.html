@@ -2445,6 +2445,7 @@ function handleWebSocketEvent(data) {
       
     case 'progress':
       setProgressBar(data.pct);
+      if (data.total && data.total > _videoDuration) _videoDuration = data.total;
       break;
       
     case 'complete':
@@ -2472,12 +2473,16 @@ function flashAgent(agentName) {
 }
 
 // Telemetry timeline markers
+// timeline state
+let _videoDuration = 0;  // seconds, inferred from progress events
+
 function addTimelineMarker(ev) {
   const bar = document.getElementById('timeline-bar');
   if (!bar) return;
   const et = ev.event_type || '';
   const ts = ev.timestamp || '0s';
   const sec = parseFloat(ts);
+  if (isNaN(sec)) return;
   
   let cls = 'timeline-marker';
   if (et.includes('GOAL') || et === 'SIX' || et === 'FOUR') cls += ' goal';
@@ -2485,10 +2490,13 @@ function addTimelineMarker(ev) {
   else if (et.includes('CARD')) cls += ' card-y';
   else if (et.includes('VAR')) cls += ' var';
 
-  // calculate position based on arbitrary length or random spreads
+  // position based on video duration (fallback: assume 5 min)
+  const dur = _videoDuration || 300;
+  const pct = Math.min((sec / dur) * 100, 98);
+
   const marker = document.createElement('div');
   marker.className = cls;
-  marker.style.left = (Math.random() * 85 + 8) + '%';
+  marker.style.left = pct + '%';
   marker.title = `[${ts}] ${et} — ${ev.description || ''}`;
   
   // Seek trigger
