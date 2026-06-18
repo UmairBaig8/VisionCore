@@ -544,10 +544,26 @@ class VideoOrchestrator:
                         self.ctx.update_phase(parsed["phase"])
                     # split: significant events trigger reasoning/commentary/reels
                     sig_events = [e for e in key_events if e.get("type") != "GOAL_ATTEMPT"]
-                    # score fallback: if scoreboard hasn't updated in last 20 frames,
-                    # increment score from GOAL events regardless
+                    # GOAL validation gate: reject GOAL if scene doesn't confirm it
+                    goal_keywords = ["celebration", "celebrating", "net", "goal scored",
+                                     "ball in the net", "scoreboard", "arms raised",
+                                     "sliding on knees", "fist pump", "hugging"]
+                    has_goal_context = any(kw in scene_desc.lower() for kw in goal_keywords)
+                    validated_goals = []
                     for ev in sig_events:
-                        if ev.get("type") == "GOAL" and self.ctx.last_score_change != "scoreboard":
+                        if ev.get("type") == "GOAL":
+                            if has_goal_context:
+                                validated_goals.append(ev)
+                            else:
+                                # downgrade to attempt — scene doesn't confirm goal
+                                ev = dict(ev, type="GOAL_ATTEMPT")
+                                logger.debug("  downgraded GOAL → GOAL_ATTEMPT (no scene confirmation)")
+                        validated_goals.append(ev)
+                    sig_events = validated_goals
+                    # score fallback: only if scoreboard has NEVER read a score (not just not recently)
+                    sb_has_read = any(h > 0 or a > 0 for h, a, _ in sb_history)
+                    for ev in sig_events:
+                        if ev.get("type") == "GOAL" and not sb_has_read:
                             side = ev.get("team", "home")
                             if "away" in side.lower():
                                 if self.ctx.away_score >= 0:
