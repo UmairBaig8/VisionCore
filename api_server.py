@@ -87,14 +87,13 @@ class WebSocketEmitter(EventEmitter):
 
     def on_key_event(self, event):
         et = event.get("type", "")
-        if et == "GOAL_ATTEMPT":
-            return
         self._send({"type": "key_event",
                      "event_type": et,
                      "timestamp": event.get("timestamp", ""),
                      "team": event.get("team", ""),
                      "player": event.get("player", ""),
-                     "description": event.get("global_time", "")})
+                     "description": event.get("global_time", ""),
+                     "is_attempt": et == "GOAL_ATTEMPT"})
 
     def on_clip_generated(self, event_type, timestamp, path, total_clips):
         self._send({"type": "clip", "event_type": event_type,
@@ -117,6 +116,18 @@ class WebSocketEmitter(EventEmitter):
                      "key_events_count": key_events_count,
                      "reel_urls": {k: f"/output/reels/live/{Path(v).name}"
                                    for k, v in (reel_paths or {}).items()}})
+
+    def on_analysis_complete(self, event_count, final_score):
+        self._send({"type": "analysis_complete",
+                     "event_count": event_count,
+                     "score": final_score,
+                     "status": "generating_reels"})
+
+    def on_reel_progress(self, flavor, idx, total):
+        self._send({"type": "reel_progress",
+                     "flavor": flavor,
+                     "idx": idx,
+                     "total": total})
 
     def on_error(self, message):
         self._send({"type": "error", "message": message})

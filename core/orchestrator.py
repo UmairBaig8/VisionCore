@@ -425,50 +425,60 @@ class VideoOrchestrator:
             if scene_desc is None:
                 continue
 
-            # step 1b: scoreboard reading (every 5th frame, crops top 20%)
+            # step 1b: scoreboard reading (every 5th frame, adaptive crop)
             sb_applied = False
             if scoreboard_prompt and processed % 5 == 0:
-                h, w = frame.shape[:2]
-                crop = frame[0:int(h * 0.20), :]
-                sb_b64 = encode_frame(crop)
-                if sb_b64:
-                    sb_result = _ask_with_retry(client, scoreboard_prompt, sb_b64, label="scoreboard")
+                fh, fw = frame.shape[:2]
+                # try multiple crop regions for different scoreboard positions
+                crop_regions = [
+                    ("top", frame[0:int(fh * 0.18), :]),                      # top bar
+                    ("top-left", frame[0:int(fh * 0.22), 0:int(fw * 0.35)]),   # top-left corner
+                    ("top-right", frame[0:int(fh * 0.22), int(fw * 0.65):]),   # top-right corner
+                    ("bottom", frame[int(fh * 0.82):, :]),                      # bottom bar
+                ]
+                for region_name, crop in crop_regions:
+                    if crop.size == 0:
+                        continue
+                    sb_b64 = encode_frame(crop)
+                    if not sb_b64:
+                        continue
+                    sb_result = _ask_with_retry(client, scoreboard_prompt, sb_b64,
+                                                label=f"scoreboard_{region_name}")
                     self._emit_agent("scoreboard")
-                    if sb_result:
-                        sb_parsed = _parse_json_safe(sb_result)
-                        sb_score = sb_parsed.get("score", "")
-                        sb_conf = sb_parsed.get("confidence", 0)
-                        if sb_score and sb_score != "NO_SCOREBOARD" and sb_conf >= 0.7:
-                            try:
-                                parts = sb_score.strip().split("-")
-                                if len(parts) == 2:
-                                    sh, sa = int(parts[0].strip()), int(parts[1].strip())
-                                    # track history: require 2 consistent readings for multi-goal jumps
-                                    jump = (sh - self.ctx.home_score) + (sa - self.ctx.away_score)
-                                    sb_history.append((sh, sa, sb_conf))
-                                    if len(sb_history) > 6:
-                                        sb_history.pop(0)
-                                    # require higher confidence + consensus for multi-goal jumps
-                                    min_conf = 0.7 if jump <= 1 else 0.90
-                                    required_consensus = 1 if jump <= 1 else 2
-                                    consistent = sum(1 for hs, a_, _ in sb_history[-required_consensus:]
-                                                    if (hs, a_) == (sh, sa))
-                                    if sb_conf >= min_conf and consistent >= required_consensus:
-                                        # never decrease — score only goes up
-                                        if sh >= self.ctx.home_score and sa >= self.ctx.away_score:
-                                            if (sh, sa) != (self.ctx.home_score, self.ctx.away_score):
-                                                self.ctx.home_score = sh
-                                                self.ctx.away_score = sa
-                                                self.ctx.last_score_change = "scoreboard"
-                                                self.emitter.on_score_change(sh, sa)
-                                                sb_applied = True
-                                                logger.debug("  scoreboard read %d-%d (conf=%.2f cons=%d)",
-                                                             sh, sa, sb_conf, consistent)
-                                    else:
-                                        logger.debug("  scoreboard rejected %d-%d: jump=%d conf=%.2f < min=%.2f cons=%d<%d",
-                                                     sh, sa, jump, sb_conf, min_conf, consistent, required_consensus)
-                            except (ValueError, IndexError):
-                                pass
+                    if not sb_result:
+                        continue
+                    sb_parsed = _parse_json_safe(sb_result)
+                    sb_score = sb_parsed.get("score", "")
+                    sb_conf = sb_parsed.get("confidence", 0)
+                    if sb_score and sb_score != "NO_SCOREBOARD" and sb_conf >= 0.7:
+                        try:
+                            parts = sb_score.strip().split("-")
+                            if len(parts) == 2:
+                                sh, sa = int(parts[0].strip()), int(parts[1].strip())
+                                jump = (sh - self.ctx.home_score) + (sa - self.ctx.away_score)
+                                sb_history.append((sh, sa, sb_conf))
+                                if len(sb_history) > 6:
+                                    sb_history.pop(0)
+                                min_conf = 0.7 if jump <= 1 else 0.90
+                                required_consensus = 1 if jump <= 1 else 2
+                                consistent = sum(1 for hs, a_, _ in sb_history[-required_consensus:]
+                                                if (hs, a_) == (sh, sa))
+                                if sb_conf >= min_conf and consistent >= required_consensus:
+                                    if sh >= self.ctx.home_score and sa >= self.ctx.away_score:
+                                        if (sh, sa) != (self.ctx.home_score, self.ctx.away_score):
+                                            self.ctx.home_score = sh
+                                            self.ctx.away_score = sa
+                                            self.ctx.last_score_change = "scoreboard"
+                                            self.emitter.on_score_change(sh, sa)
+                                            sb_applied = True
+                                            logger.debug("  scoreboard[%s] read %d-%d (conf=%.2f cons=%d)",
+                                                         region_name, sh, sa, sb_conf, consistent)
+                                else:
+                                    logger.debug("  scoreboard[%s] rejected %d-%d: jump=%d conf=%.2f",
+                                                 region_name, sh, sa, jump, sb_conf)
+                                break  # found score in this region
+                        except (ValueError, IndexError):
+                            pass
 
             # extract score + phase from scene description (fallback — skip score if scoreboard read this frame)
             old_score = self.ctx.score_string()
@@ -506,8 +516,6 @@ class VideoOrchestrator:
                     for e in events:
                         e["timestamp"] = f"{timestamp:.1f}s"
                     key_events = router.process_event(events)
-                    # filter GOAL_ATTEMPT — LLM can't differentiate from GOAL
-                    key_events = [e for e in key_events if e.get("type") != "GOAL_ATTEMPT"]
                     # deduplicate: if GOAL detected within 4s of GOAL_ATTEMPT, merge
                     if len(self.ctx.key_events) >= 2:
                         prev = self.ctx.key_events[-1]
@@ -517,7 +525,6 @@ class VideoOrchestrator:
                                 pt = float(prev.get("timestamp", "0").replace("s", ""))
                                 ct = float(curr.get("timestamp", "0").replace("s", ""))
                                 if ct - pt < 4.0:
-                                    # merge: replace GOAL_ATTEMPT with GOAL
                                     self.ctx.key_events[-1] = curr
                                     self.ctx.key_events[-1]["timestamp"] = prev["timestamp"]
                                     key_events = []
@@ -526,23 +533,24 @@ class VideoOrchestrator:
                     # update momentum from event data
                     if "possession_home" in parsed:
                         self.ctx.update_momentum(int(parsed["possession_home"]))
-                    # update phase if event provides it
                     if "phase" in parsed:
                         self.ctx.update_phase(parsed["phase"])
+                    # split: significant events trigger reasoning/commentary/reels
+                    sig_events = [e for e in key_events if e.get("type") != "GOAL_ATTEMPT"]
 
             t_analysis = 0.0
-            if do_analysis and key_events:
+            if do_analysis and sig_events:
                 parallel_tasks = {}
                 if reasoning_prompt:
                     parallel_tasks["reasoning"] = (
                         f"{reasoning_prompt}\n\n"
-                        f"Event: {json.dumps(key_events)}",
+                        f"Event: {json.dumps(sig_events)}",
                         None
                     )
                 if commentary_prompt:
                     parallel_tasks["commentary"] = (
                         f"{commentary_prompt}\n\n"
-                        f"Event: {json.dumps(key_events)}",
+                        f"Event: {json.dumps(sig_events)}",
                         None
                     )
                 if parallel_tasks:
@@ -554,9 +562,9 @@ class VideoOrchestrator:
                     self._emit_agent("reasoning")
                     self._emit_agent("commentary")
 
-            # ── immediate clip generation for live reel ──
-            if live_reel and key_events:
-                for ev in key_events:
+            # ── immediate clip generation for live reel (significant events only) ──
+            if live_reel and sig_events:
+                for ev in sig_events:
                     clip = live_reel.add_event(ev)
                     if clip:
                         self.emitter.on_clip_generated(
@@ -641,6 +649,10 @@ class VideoOrchestrator:
         video_stem = Path(self.video_path).stem
         csv_path = save_csv(timeline.events, video_stem, self.ctx)
 
+        # ── emit analysis complete BEFORE reel generation so UI doesn't look stuck ──
+        self.emitter.on_analysis_complete(
+            len(self.ctx.key_events), self.ctx.score_string())
+
         # ── summary generation ──
         highlights = ""
         if highlight_prompt and self.ctx.key_events:
@@ -686,6 +698,9 @@ class VideoOrchestrator:
                     flavors = []
 
                 print("Generating pro reels:")
+                reel_flavors = flavors or ["custom"]
+                for idx, flavor in enumerate(reel_flavors, 1):
+                    self.emitter.on_reel_progress(flavor, idx, len(reel_flavors))
                 more_paths = generate_all_reels(
                     self.video_path, self.ctx.key_events, video_stem,
                     flavors=flavors or None,
@@ -695,6 +710,8 @@ class VideoOrchestrator:
                     team=self.team_filter,
                 )
                 reel_paths.update(more_paths)
+                for idx, flavor in enumerate(reel_flavors, 1):
+                    self.emitter.on_reel_progress(flavor, idx, len(reel_flavors))
 
         if not self.report_only:
             print(f"\nType:   {self.ctx.video_type}  |  Sport: {self.ctx.sport}")

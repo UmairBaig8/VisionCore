@@ -37,5 +37,11 @@ class EventEmitter:
     def on_complete(self, report_path, csv_path, reel_paths, key_events_count):
         pass
 
+    def on_analysis_complete(self, event_count, final_score):
+        """Fired BEFORE reel generation — unblocks UI immediately."""
+
+    def on_reel_progress(self, flavor, idx, total):
+        """Fired during reel generation so UI shows activity."""
+
     def on_error(self, message):
         pass
