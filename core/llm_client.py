@@ -38,7 +38,6 @@ class VLLMClient:
             "model": self.model,
             "messages": [{"role": "user", "content": content}],
             "temperature": 0.1,
-            "max_tokens": 512,
         }
 
         t0 = time.time()

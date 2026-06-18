@@ -513,6 +513,9 @@ class VideoOrchestrator:
         # scoreboard history buffer: only accept new score after 2 consistent readings
         sb_history = []
 
+        # goal confirmation buffer: require 2 frames within 8s to confirm a GOAL
+        pending_goals = {}  # {goal_hash: {"event": ev, "first_ts": ts, "count": n}}
+
         for timestamp, frame in sampler(self.video_path, self.sample_interval):
             t_start = time.time()
             processed += 1
@@ -542,19 +545,24 @@ class VideoOrchestrator:
 
             parallel_tasks = {"scene": (scene_prompt + yolo_hint, image_b64)}
 
-            # event detection: always run in parallel with scene (uses frame + YOLO, not scene text)
+            # event detection: run in parallel only if YOLO doesn't suggest skipping
             if do_event and event_prompt:
-                ev_img = image_b64  # same frame
-                ev_hint = yolo_hint if yolo else ""
-                parallel_tasks["event"] = (f"{event_prompt}\n\nAnalyze this frame for key events. Reply with JSON only.{ev_hint}", ev_img)
+                skip_event = self.ctx.consecutive_generic_frames >= 3 and (
+                    not yolo or yolo.get("ball_zone") in ("midfield", "far_end", "not_visible"))
+                if not skip_event:
+                    ev_hint = yolo_hint if yolo else ""
+                    parallel_tasks["event"] = (
+                        f"{event_prompt}\n\nAnalyze this frame for key events. Reply with JSON only.{ev_hint}",
+                        image_b64)
 
-            # scoreboard: every 5th frame, 1 region
+            # scoreboard: every 5th frame, rotating region
             sb_crop = None
             sb_region_name = None
             if scoreboard_prompt and processed % 5 == 0:
                 fh, fw = frame.shape[:2]
-                crop_regions = [("top", frame[0:int(fh * 0.18), :]),
-                                ("bottom", frame[int(fh * 0.82):, :])]
+                crop_regions = [("top-bar", frame[0:int(fh * 0.15), :]),
+                                ("bottom-bar", frame[int(fh * 0.85):, :]),
+                                ("top-third", frame[0:int(fh * 0.33), :])]
                 region_idx = (processed // 5) % len(crop_regions)
                 sb_region_name, sb_crop = crop_regions[region_idx]
                 if sb_crop.size > 0:
@@ -690,30 +698,32 @@ class VideoOrchestrator:
                     if ev.get("type") == "GOAL":
                         yolo_ok = yolo and yolo.get("has_goal_activity", True)
                         if has_goal_context and yolo_ok:
-                            validated_goals.append(ev)
+                            # cross-frame confirmation: require 2 frames within 8s
+                            goal_key = f"{ev.get('team','?')}_{ev.get('player','?')}"
+                            if goal_key in pending_goals:
+                                pending_goals[goal_key]["count"] += 1
+                                if pending_goals[goal_key]["count"] >= 2:
+                                    validated_goals.append(ev)
+                                    del pending_goals[goal_key]
+                                    logger.info("  GOAL confirmed: %s (2 frames)", goal_key)
+                            else:
+                                pending_goals[goal_key] = {"event": ev, "first_ts": timestamp, "count": 1}
+                                logger.debug("  GOAL pending: %s (need 2nd frame)", goal_key)
+                                # emit as GOAL_ATTEMPT until confirmed
+                                ev = dict(ev, type="GOAL_ATTEMPT")
+                                validated_goals.append(ev)
                         else:
                             reason = "no scene confirmation" if not has_goal_context else "YOLO: ball not in box"
                             ev = dict(ev, type="GOAL_ATTEMPT")
                             logger.debug("  downgraded GOAL → GOAL_ATTEMPT (%s)", reason)
-                    validated_goals.append(ev)
+                            validated_goals.append(ev)
+                    else:
+                        validated_goals.append(ev)
+                # expire stale pending goals (>10s old)
+                for gk in list(pending_goals.keys()):
+                    if timestamp - pending_goals[gk]["first_ts"] > 10.0:
+                        del pending_goals[gk]
                 sig_events = validated_goals
-                # score fallback: only if scoreboard has NEVER read a score
-                sb_has_read = any(h > 0 or a > 0 for h, a, _ in sb_history)
-                for ev in sig_events:
-                    if ev.get("type") == "GOAL" and not sb_has_read:
-                        side = ev.get("team", "home")
-                        if "away" in side.lower():
-                            if self.ctx.away_score >= 0:
-                                self.ctx.away_score += 1
-                                self.ctx.last_score_change = "event_goal"
-                                self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
-                                logger.debug("  score fallback: away goal → %s", self.ctx.score_string())
-                        else:
-                            if self.ctx.home_score >= 0:
-                                self.ctx.home_score += 1
-                                self.ctx.last_score_change = "event_goal"
-                                self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
-                                logger.debug("  score fallback: home goal → %s", self.ctx.score_string())
 
             # extract score + phase from scene description
             old_score = self.ctx.score_string()
