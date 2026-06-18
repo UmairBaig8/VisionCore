@@ -555,20 +555,12 @@ class VideoOrchestrator:
                         f"{event_prompt}\n\nAnalyze this frame for key events. Reply with JSON only.{ev_hint}",
                         image_b64)
 
-            # scoreboard: every 5th frame, rotating region
-            sb_crop = None
-            sb_region_name = None
+            # scoreboard: every 5th frame, full frame (no crop — VLM finds it anywhere)
+            sb_applied = False
             if scoreboard_prompt and processed % 5 == 0:
-                fh, fw = frame.shape[:2]
-                crop_regions = [("top-bar", frame[0:int(fh * 0.15), :]),
-                                ("bottom-bar", frame[int(fh * 0.85):, :]),
-                                ("top-third", frame[0:int(fh * 0.33), :])]
-                region_idx = (processed // 5) % len(crop_regions)
-                sb_region_name, sb_crop = crop_regions[region_idx]
-                if sb_crop.size > 0:
-                    sb_b64 = encode_frame(sb_crop)
-                    if sb_b64:
-                        parallel_tasks["scoreboard"] = (scoreboard_prompt, sb_b64)
+                sb_b64 = image_b64  # reuse already-encoded full frame
+                if sb_b64:
+                    parallel_tasks["scoreboard"] = (scoreboard_prompt, sb_b64)
 
             t_parallel = time.time()
             parallel_results = self._run_parallel(client, parallel_tasks)
@@ -583,7 +575,7 @@ class VideoOrchestrator:
             # process scoreboard result
             sb_applied = False
             sb_result = parallel_results.get("scoreboard")
-            if sb_result and sb_region_name:
+            if sb_result:
                 self._emit_agent("scoreboard")
                 sb_parsed = _parse_json_safe(sb_result)
                 sb_score = sb_parsed.get("score", "")
@@ -615,7 +607,7 @@ class VideoOrchestrator:
                                             self.ctx.last_score_change = "scoreboard"
                                             self.emitter.on_score_change(sh, sa)
                                             sb_applied = True
-                                            logger.debug("  scoreboard[%s] %d-%d", sb_region_name, sh, sa)
+                                            logger.debug("  scoreboard %d-%d", sh, sa)
                     except (ValueError, IndexError):
                         pass
 
