@@ -229,21 +229,27 @@ def _update_context_from_scene(ctx, scene_desc, skip_score=False):
     if skip_score:
         return
 
-    # ── score extraction: only match score-like patterns, not jersey numbers ──
+    # ── score extraction: match score-like patterns in scene description ──
     score_patterns = [
-        r'(?:ROM|VER|PSV|DOR|[A-Z]{2,4})\s*(\d+)\s*[-–]\s*(\d+)\s*(?:ROM|VER|PSV|DOR|[A-Z]{2,4})?',
-        r'(?:score|Score)\S*\s*(\d+)\s*[-–]\s*(\d+)',
-        r'(?:leads?|leading|winning|trailing|tied)\s+(\d+)\s*[-–]\s*(\d+)',
+        r'\bscore\S*\s*[:=]?\s*(\d+)\s*[-–]\s*(\d+)\b',
+        r'\b(?:leads?|leading|winning|trailing|tied)\s+(\d+)\s*[-–]\s*(\d+)\b',
+        r'\b([A-Z]{2,4})\s+(\d+)\s*[-–]\s*(\d+)\s+\1\b',
+        r'\b(?:currently|now|still)\s+(\d+)\s*[-–]\s*(\d+)\b',
     ]
     for pat in score_patterns:
         m = re.search(pat, scene_desc, re.IGNORECASE)
         if m:
             try:
-                h, a = int(m.group(1)), int(m.group(2))
+                groups = m.groups()
+                if len(groups) == 3:
+                    h, a = int(groups[1]), int(groups[2])
+                else:
+                    h, a = int(groups[0]), int(groups[1])
                 if (h, a) != (ctx.home_score, ctx.away_score):
-                    ctx.home_score = h
-                    ctx.away_score = a
-                    ctx.last_score_change = "detected_from_scene"
+                    if h >= ctx.home_score and a >= ctx.away_score:
+                        ctx.home_score = h
+                        ctx.away_score = a
+                        ctx.last_score_change = "detected_from_scene"
             except (ValueError, IndexError):
                 pass
             break
@@ -401,6 +407,9 @@ class VideoOrchestrator:
         if scoreboard_path.exists():
             scoreboard_prompt = scoreboard_path.read_text()
 
+        # scoreboard history buffer: only accept new score after 2 consistent readings
+        sb_history = []
+
         for timestamp, frame in sampler(self.video_path, self.sample_interval):
             t_start = time.time()
             processed += 1
@@ -417,7 +426,7 @@ class VideoOrchestrator:
                 continue
 
             # step 1b: scoreboard reading (every 5th frame, crops top 20%)
-            sb_score = None
+            sb_applied = False
             if scoreboard_prompt and processed % 5 == 0:
                 h, w = frame.shape[:2]
                 crop = frame[0:int(h * 0.20), :]
@@ -434,21 +443,37 @@ class VideoOrchestrator:
                                 parts = sb_score.strip().split("-")
                                 if len(parts) == 2:
                                     sh, sa = int(parts[0].strip()), int(parts[1].strip())
-                                    # never decrease — score only goes up
-                                    if sh >= self.ctx.home_score and sa >= self.ctx.away_score:
-                                        if (sh, sa) != (self.ctx.home_score, self.ctx.away_score):
-                                            self.ctx.home_score = sh
-                                            self.ctx.away_score = sa
-                                            self.ctx.last_score_change = "scoreboard"
-                                            self.emitter.on_score_change(sh, sa)
-                                            logger.debug("  scoreboard read %d-%d", sh, sa)
+                                    # track history: require 2 consistent readings for multi-goal jumps
+                                    jump = (sh - self.ctx.home_score) + (sa - self.ctx.away_score)
+                                    sb_history.append((sh, sa, sb_conf))
+                                    if len(sb_history) > 6:
+                                        sb_history.pop(0)
+                                    # require higher confidence + consensus for multi-goal jumps
+                                    min_conf = 0.7 if jump <= 1 else 0.90
+                                    required_consensus = 1 if jump <= 1 else 2
+                                    consistent = sum(1 for hs, a_, _ in sb_history[-required_consensus:]
+                                                    if (hs, a_) == (sh, sa))
+                                    if sb_conf >= min_conf and consistent >= required_consensus:
+                                        # never decrease — score only goes up
+                                        if sh >= self.ctx.home_score and sa >= self.ctx.away_score:
+                                            if (sh, sa) != (self.ctx.home_score, self.ctx.away_score):
+                                                self.ctx.home_score = sh
+                                                self.ctx.away_score = sa
+                                                self.ctx.last_score_change = "scoreboard"
+                                                self.emitter.on_score_change(sh, sa)
+                                                sb_applied = True
+                                                logger.debug("  scoreboard read %d-%d (conf=%.2f cons=%d)",
+                                                             sh, sa, sb_conf, consistent)
+                                    else:
+                                        logger.debug("  scoreboard rejected %d-%d: jump=%d conf=%.2f < min=%.2f cons=%d<%d",
+                                                     sh, sa, jump, sb_conf, min_conf, consistent, required_consensus)
                             except (ValueError, IndexError):
                                 pass
 
             # extract score + phase from scene description (fallback — skip score if scoreboard read this frame)
             old_score = self.ctx.score_string()
             old_phase = self.ctx.phase
-            _update_context_from_scene(self.ctx, scene_desc, skip_score=sb_score is not None)
+            _update_context_from_scene(self.ctx, scene_desc, skip_score=sb_applied)
             if self.ctx.score_string() != old_score:
                 self.emitter.on_score_change(self.ctx.home_score, self.ctx.away_score)
 

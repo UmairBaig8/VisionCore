@@ -8,6 +8,9 @@ Rules:
 3. If you CANNOT clearly see a scoreboard or the numbers are unreadable, return exactly: NO_SCOREBOARD
 4. Do NOT guess. Only return a score if you can clearly read the numbers.
 5. Ignore clock/timers, possession indicators, or other graphics — ONLY the score.
+6. Read left-to-right: the first number is home, the second is away.
+7. Double-check: if the numbers are fuzzy, lower your confidence. Aim for accuracy over certainty.
+8. Scores are typically 0-9 each side for most sports.
 
 Respond with JSON format:
 {

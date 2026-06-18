@@ -52,11 +52,6 @@ class MatchContext:
 
         et = event.get("type", "")
         if et in ("GOAL",):
-            side = event.get("team", "home")
-            if "away" in side.lower():
-                self.away_score += 1
-            else:
-                self.home_score += 1
             self.last_score_change = event.get("timestamp")
             self.force_full_pipeline = True
             self.consecutive_generic_frames = 0
